@@ -243,6 +243,31 @@ function autoRatioForWeek(weekNum){
   const stage = Math.min(Math.floor((weekNum-1)/2), RATIOS.length-1);
   return RATIOS[stage];
 }
+function toDateStr(d){
+  return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+}
+function todayStr(){ return toDateStr(new Date()); }
+const DAY_PATTERN = ['walkxt','run','walkxt','run','walkxt','rest','longrun']; // Lun..Dom
+const DAY_NAMES = ['lunes','martes','miércoles','jueves','viernes','sábado','domingo'];
+function buildSchedule(planId, startDateStr){
+  const plan = getPlan(planId);
+  const start = new Date(startDateStr+'T00:00:00');
+  const days = [];
+  for(let i=0;i<plan.weeks.length*7;i++){
+    const d = new Date(start); d.setDate(start.getDate()+i);
+    const weekIdx = Math.floor(i/7);
+    const w = plan.weeks[weekIdx];
+    const type = DAY_PATTERN[i%7];
+    days.push({
+      date: toDateStr(d), weekNum: weekIdx+1, type,
+      runMin: type==='run' ? w.runMin : null,
+      longMiles: type==='longrun' ? w.longMiles : null,
+      isRace: type==='longrun' ? !!w.isRace : false,
+      completed:false
+    });
+  }
+  return {planId, startDate: startDateStr, days};
+}
 
 /* ============== STATE ============== */
 let state = {
@@ -252,6 +277,8 @@ let state = {
   gpsWatch:null,
   history:[],
   planProgress:{}, // {planId: completedWeekCount}
+  schedule:null, // {planId, startDate, days:[...]}
+  expandedWeeks:new Set(),
   settings:{voice:true, gps:true, vibrate:true},
   pre:{
     activityId:'running',
@@ -279,7 +306,17 @@ async function loadPersisted(){
     const pre = await window.storage.get('pre-selection');
     if(pre) state.pre = JSON.parse(pre.value);
   }catch(e){}
+  try{
+    const sch = await window.storage.get('schedule');
+    if(sch) state.schedule = JSON.parse(sch.value);
+  }catch(e){ state.schedule = null; }
   render();
+}
+async function persistSchedule(){
+  try{
+    if(state.schedule) await window.storage.set('schedule', JSON.stringify(state.schedule));
+    else await window.storage.delete('schedule');
+  }catch(e){}
 }
 async function persistPre(){
   try{ await window.storage.set('pre-selection', JSON.stringify(state.pre)); }catch(e){}
@@ -335,6 +372,17 @@ function haversine(lat1,lon1,lat2,lon2){
 }
 
 /* ============== SESSION CONTROL ============== */
+function startScheduledDay(dateStr){
+  const day = state.schedule.days.find(d=>d.date===dateStr);
+  if(!day) return;
+  const r = autoRatioForWeek(day.weekNum);
+  if(day.type==='run'){
+    startSession(r.run, r.walk, day.runMin, {planId:state.schedule.planId, weekNum:day.weekNum, sessionType:'short', scheduleDate:dateStr});
+  } else if(day.type==='longrun'){
+    const minutes = estimateLongRunMinutes(day.longMiles);
+    startSession(r.run, r.walk, minutes, {planId:state.schedule.planId, weekNum:day.weekNum, sessionType:'long', scheduleDate:dateStr});
+  }
+}
 function startSession(runSec, walkSec, minutes, planMeta){
   const isWalkOnly = state.pre.activityId === 'walking';
   const intervals = isWalkOnly
@@ -495,6 +543,10 @@ function finishSession(){
     state.planProgress[s.planMeta.planId] = Math.max(cur, s.planMeta.weekNum);
     persistProgress();
   }
+  if(s.planMeta && s.planMeta.scheduleDate && state.schedule){
+    const day = state.schedule.days.find(d=>d.date===s.planMeta.scheduleDate);
+    if(day){ day.completed = true; persistSchedule(); }
+  }
   speak('Sesión completada. Buen trabajo.');
   state.screen = 'summary';
   state.lastSummary = record;
@@ -576,8 +628,20 @@ function renderTrain(){
   const musicName = MUSIC_OPTIONS.find(m=>m.id===state.pre.musicId)?.name || 'Ninguna';
   const audioName = AUDIO_STATS.find(a=>a.id===state.pre.audioStatId)?.name || 'Ninguna';
   const activityName = ACTIVITIES.find(a=>a.id===state.pre.activityId)?.name || 'Running';
+  let todayBanner = '';
+  if(state.schedule){
+    const today = state.schedule.days.find(d=>d.date===todayStr());
+    if(today){
+      const canStart = (today.type==='run'||today.type==='longrun') && !today.completed;
+      todayBanner = `<div class="plan-card" ${canStart?`data-action="start-sched-day" data-date="${today.date}"`:''} style="margin-bottom:14px; border-color:var(--run);">
+        <div class="ratio-name">Hoy: ${dayTypeLabel(today)}</div>
+        <div class="ratio-detail">${today.completed?'Ya completado ✓':(canStart?'Toca para comenzar':'Día sin cronómetro — descansa o haz tu caminata/cruzado')}</div>
+      </div>`;
+    }
+  }
   return `<div class="session-pick">
-    <div class="eyebrow">Antes de empezar</div>
+    ${todayBanner}
+    <div class="eyebrow" style="${todayBanner?'':'margin-top:0;'}">Antes de empezar</div>
     <div class="menu-grid">
       <div class="menu-card" data-action="open-activity">
         <span class="menu-icon">▷</span>
@@ -604,7 +668,55 @@ function renderTrain(){
   </div>`;
 }
 
+function dayTypeLabel(day){
+  if(day.type==='walkxt') return 'Caminata o cruzado';
+  if(day.type==='rest') return 'Descanso';
+  if(day.type==='run') return `Trote-camina · ${day.runMin} min`;
+  if(day.type==='longrun') return (day.isRace?'🏁 Carrera · ':'Carrera larga · ')+day.longMiles+' mi';
+  return '';
+}
+function formatDayHeader(dateStr){
+  const d = new Date(dateStr+'T00:00:00');
+  return DAY_NAMES[(d.getDay()+6)%7] + ' ' + d.getDate() + ' ' + d.toLocaleDateString('es-CL',{month:'short'}).replace('.','');
+}
+function renderCalendar(){
+  const sch = state.schedule;
+  const plan = getPlan(sch.planId);
+  const today = todayStr();
+  const totalWeeks = plan.weeks.length;
+  const doneCount = sch.days.filter(d=>d.completed).length;
+  let html = `<div class="eyebrow" style="margin-top:0;">${plan.name} · calendario</div>
+    <div class="ratio-card" style="cursor:default; margin-bottom:14px;">
+      <div><div class="ratio-name">Inicio ${formatDayHeader(sch.startDate)}</div><div class="ratio-detail">${doneCount} de ${sch.days.length} días completados</div></div>
+      <div class="ratio-pill" style="cursor:pointer; color:var(--run);" data-action="clear-schedule">Quitar</div>
+    </div>`;
+  for(let wk=1; wk<=totalWeeks; wk++){
+    const weekDays = sch.days.filter(d=>d.weekNum===wk);
+    const expanded = state.expandedWeeks.has(wk);
+    const isCurrent = weekDays.some(d=>d.date===today);
+    const weekDone = weekDays.filter(d=>d.completed).length;
+    html += `<div class="plan-card" data-action="toggle-week" data-week="${wk}" style="margin-bottom:8px; ${isCurrent?'border-color:var(--run);':''}">
+      <div style="display:flex; justify-content:space-between; align-items:center;">
+        <div class="ratio-name">Semana ${wk}${isCurrent?' · esta semana':''}</div>
+        <div class="ratio-pill">${weekDone}/7 ${expanded?'▲':'▼'}</div>
+      </div>
+      <div class="ratio-detail">${formatDayHeader(weekDays[0].date)} → ${formatDayHeader(weekDays[6].date)}</div>
+    </div>`;
+    if(expanded){
+      weekDays.forEach(day=>{
+        const isToday = day.date===today;
+        const canStart = (day.type==='run'||day.type==='longrun') && !day.completed;
+        html += `<div class="pick-item" style="margin-left:10px; ${isToday?'border-color:var(--run);':''} ${day.completed?'opacity:.55;':''}" ${canStart?`data-action="start-sched-day" data-date="${day.date}"`:''}>
+          <div><div class="pi-name">${isToday?'Hoy · ':''}${formatDayHeader(day.date)}</div><div class="pi-sub">${dayTypeLabel(day)}</div></div>
+          ${day.completed?'<span class="pi-check">✓</span>':(canStart?'<span class="pi-check" style="color:var(--text-muted);">▷</span>':'')}
+        </div>`;
+      });
+    }
+  }
+  return html;
+}
 function renderPlans(){
+  if(state.schedule) return renderCalendar();
   let html = '';
   PLANS.forEach(plan=>{
     const progress = state.planProgress[plan.id] || 0;
@@ -783,6 +895,24 @@ function attachHandlers(){
   document.querySelectorAll('[data-action="open-plan-detail"]').forEach(el=>{
     el.onclick = ()=> openPlanSessionPicker(el.dataset.plan, null);
   });
+  document.querySelectorAll('[data-action="toggle-week"]').forEach(el=>{
+    el.onclick = ()=>{
+      const wk = parseInt(el.dataset.week);
+      if(state.expandedWeeks.has(wk)) state.expandedWeeks.delete(wk);
+      else state.expandedWeeks.add(wk);
+      render();
+    };
+  });
+  document.querySelectorAll('[data-action="start-sched-day"]').forEach(el=>{
+    el.onclick = ()=> startScheduledDay(el.dataset.date);
+  });
+  const clearSched = document.querySelector('[data-action="clear-schedule"]');
+  if(clearSched) clearSched.onclick = (e)=>{
+    e.stopPropagation();
+    state.schedule = null;
+    persistSchedule();
+    render();
+  };
   const pauseBtn = document.querySelector('[data-action="pause"]');
   if(pauseBtn) pauseBtn.onclick = pauseToggle;
   const stopBtn = document.querySelector('[data-action="stop"]');
@@ -832,7 +962,12 @@ function openPlanSessionPicker(planId, closeParent){
       <div><div class="pi-name">${w.isRace?'Carrera':'Carrera larga'} (domingo)</div><div class="pi-sub">${w.longMiles} mi (~${(w.longMiles*1.60934).toFixed(1)} km) · ${longMin} min estimados</div></div>
       ${longSel?'<span class="pi-check">✓</span>':''}
     </div>
-    <div class="gps-note" style="text-align:left;">La relación trote/caminata sube de fase automáticamente cada 2 semanas: Fase 1 (30s/1min) → Fase 2 (1min/1min) → Fase 3 (2min/1min) → Fase 4 (4min/1min) → Fase 5 (8min/2min), donde se mantiene el resto del plan. Lunes, miércoles y viernes: caminata o entrenamiento cruzado sin impacto. Sábado: descanso.</div>`;
+    <div class="eyebrow">O programa el plan completo</div>
+    <div style="display:flex; gap:8px; align-items:center; margin-bottom:10px;">
+      <input type="date" id="schedDate" value="${todayStr()}" style="flex:1; background:var(--surface-2); border:1px solid var(--line); color:var(--text); border-radius:10px; padding:10px; font-family:'Inter',sans-serif;">
+    </div>
+    <button class="start-btn" id="schedConfirm" style="margin-top:0;">📅 Programar ${plan.weeks.length} semanas desde esa fecha</button>
+    <div class="gps-note" style="text-align:left; margin-top:14px;">La relación trote/caminata sube de fase automáticamente cada 2 semanas: Fase 1 (30s/1min) → Fase 2 (1min/1min) → Fase 3 (2min/1min) → Fase 4 (4min/1min) → Fase 5 (8min/2min), donde se mantiene el resto del plan. Lunes, miércoles y viernes: caminata o entrenamiento cruzado sin impacto. Sábado: descanso.</div>`;
   openOverlay(plan.name, body, (ov)=>{
     ov.querySelectorAll('.pick-item').forEach(el=>{
       el.onclick = ()=>{
@@ -844,6 +979,17 @@ function openPlanSessionPicker(planId, closeParent){
         state.screen='train'; render();
       };
     });
+    const schedBtn = ov.querySelector('#schedConfirm');
+    if(schedBtn) schedBtn.onclick = ()=>{
+      const dateInput = ov.querySelector('#schedDate');
+      const startDate = dateInput.value || todayStr();
+      state.schedule = buildSchedule(planId, startDate);
+      state.expandedWeeks = new Set([1]);
+      persistSchedule();
+      ov.remove();
+      if(closeParent) closeParent.remove();
+      state.screen='plans'; render();
+    };
   });
 }
 function openEntrenamientoPicker(){
