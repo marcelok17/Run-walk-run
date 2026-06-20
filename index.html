@@ -170,14 +170,13 @@
 </div>
 
 <script>
-/* ============== DATA: RATIOS & PLANS (método Galloway) ============== */
+/* ============== DATA: RATIOS & PLANS (framework estándar run-walk-run) ============== */
 const RATIOS = [
-  {id:'30-60', name:'Iniciación', run:30, walk:60, detail:'30s trote / 60s caminata'},
-  {id:'30-30', name:'Base', run:30, walk:30, detail:'30s trote / 30s caminata'},
-  {id:'60-30', name:'Progresión', run:60, walk:30, detail:'1 min trote / 30s caminata'},
-  {id:'120-30', name:'Intermedio', run:120, walk:30, detail:'2 min trote / 30s caminata'},
-  {id:'180-30', name:'Avanzado', run:180, walk:30, detail:'3 min trote / 30s caminata'},
-  {id:'300-60', name:'Resistencia', run:300, walk:60, detail:'5 min trote / 1 min caminata'},
+  {id:'f1', name:'Fase 1 · Principiante', run:30, walk:60, detail:'30s trote / 1 min caminata'},
+  {id:'f2', name:'Fase 2', run:60, walk:60, detail:'1 min trote / 1 min caminata'},
+  {id:'f3', name:'Fase 3', run:120, walk:60, detail:'2 min trote / 1 min caminata'},
+  {id:'f4', name:'Fase 4', run:240, walk:60, detail:'4 min trote / 1 min caminata'},
+  {id:'f5', name:'Fase 5', run:480, walk:120, detail:'8 min trote / 2 min caminata'},
 ];
 const DURATIONS = [10,20,30,40,45,60];
 const ACTIVITIES = [
@@ -197,19 +196,53 @@ const AUDIO_STATS = [
   {id:'ninguna', name:'Ninguna', detail:'Sin anuncios periódicos, solo trote/caminata'},
 ];
 
-const PLAN_5K = {
-  id:'5k-8sem', name:'5K en 8 semanas', detail:'3 sesiones / semana · progresión Galloway',
-  weeks:[
-    {n:1, ratio:{run:30,walk:60}, minutes:20},
-    {n:2, ratio:{run:30,walk:45}, minutes:22},
-    {n:3, ratio:{run:30,walk:30}, minutes:24},
-    {n:4, ratio:{run:45,walk:30}, minutes:25},
-    {n:5, ratio:{run:60,walk:30}, minutes:27},
-    {n:6, ratio:{run:90,walk:30}, minutes:28},
-    {n:7, ratio:{run:120,walk:30}, minutes:30},
-    {n:8, ratio:{run:180,walk:30}, minutes:30},
-  ]
-};
+const PLANS = [
+  {
+    id:'5k-galloway', name:'5K · Jeff Galloway', source:'jeffgalloway.com', sessionsPerWeek:'Mar/Jue: trote-camina · Dom: carrera larga · Lun/Mié/Vie: caminar o XT · Sáb: descanso',
+    weeks:[
+      {n:1, runMin:15, longMiles:1},
+      {n:2, runMin:15, longMiles:1},
+      {n:3, runMin:20, longMiles:1.5},
+      {n:4, runMin:20, longMiles:1.5},
+      {n:5, runMin:25, longMiles:2},
+      {n:6, runMin:25, longMiles:2},
+      {n:7, runMin:30, longMiles:2.5},
+      {n:8, runMin:30, longMiles:2.5},
+      {n:9, runMin:30, longMiles:3},
+      {n:10, runMin:30, longMiles:3},
+      {n:11, runMin:30, longMiles:3.5},
+      {n:12, runMin:30, longMiles:3.5},
+      {n:13, runMin:30, longMiles:4},
+      {n:14, runMin:30, longMiles:4},
+      {n:15, runMin:30, longMiles:3.1, isRace:true},
+    ]
+  },
+  {
+    id:'10k-galloway', name:'10K · Jeff Galloway', source:'jeffgalloway.com', sessionsPerWeek:'Mar/Jue: trote-camina · Dom: carrera larga · Lun/Mié/Vie: caminar o XT · Sáb: descanso',
+    weeks:[
+      {n:1, runMin:25, longMiles:2},
+      {n:2, runMin:25, longMiles:2},
+      {n:3, runMin:30, longMiles:3},
+      {n:4, runMin:30, longMiles:4},
+      {n:5, runMin:35, longMiles:4},
+      {n:6, runMin:35, longMiles:5},
+      {n:7, runMin:45, longMiles:5},
+      {n:8, runMin:45, longMiles:6},
+      {n:9, runMin:45, longMiles:6},
+      {n:10, runMin:45, longMiles:7},
+      {n:11, runMin:45, longMiles:3.5},
+      {n:12, runMin:45, longMiles:4},
+      {n:13, runMin:45, longMiles:6.2, isRace:true},
+    ]
+  }
+];
+function getPlan(id){ return PLANS.find(p=>p.id===id); }
+function estimateLongRunMinutes(miles){ return Math.round(miles*13); } // ritmo conservador run-walk ~13 min/milla
+function autoRatioForWeek(weekNum){
+  // Progresión conservadora: sube un nivel de relación cada 2 semanas, partiendo de la más suave
+  const stage = Math.min(Math.floor((weekNum-1)/2), RATIOS.length-1);
+  return RATIOS[stage];
+}
 
 /* ============== STATE ============== */
 let state = {
@@ -222,7 +255,7 @@ let state = {
   settings:{voice:true, gps:true, vibrate:true},
   pre:{
     activityId:'running',
-    entrenamiento:{type:'ratio', ratioId:'30-30', minutes:20},
+    entrenamiento:{type:'ratio', ratioId:'f1', minutes:20},
     musicId:'ninguna',
     audioStatId:'tiempo'
   }
@@ -457,9 +490,9 @@ function finishSession(){
   state.history.unshift(record);
   state.history = state.history.slice(0,50);
   persistHistory();
-  if(s.planMeta && s.planMeta.planId === PLAN_5K.id){
-    const cur = state.planProgress[PLAN_5K.id] || 0;
-    state.planProgress[PLAN_5K.id] = Math.max(cur, s.planMeta.weekNum);
+  if(s.planMeta && s.planMeta.sessionType==='long'){
+    const cur = state.planProgress[s.planMeta.planId] || 0;
+    state.planProgress[s.planMeta.planId] = Math.max(cur, s.planMeta.weekNum);
     persistProgress();
   }
   speak('Sesión completada. Buen trabajo.');
@@ -532,7 +565,9 @@ function updateRing(){
 function entrenamientoLabel(){
   const e = state.pre.entrenamiento;
   if(e.type==='plan'){
-    return PLAN_5K.name + ' · Sem ' + e.weekNum;
+    const plan = getPlan(e.planId);
+    const r = autoRatioForWeek(e.weekNum);
+    return `${plan.name} · Sem ${e.weekNum} · ${e.sessionType==='long'?'Carrera larga':'Trote-camina'} (${r.name})`;
   }
   const r = RATIOS.find(x=>x.id===e.ratioId);
   return r ? `${r.name} · ${e.minutes} min` : '—';
@@ -570,22 +605,26 @@ function renderTrain(){
 }
 
 function renderPlans(){
-  const progress = state.planProgress[PLAN_5K.id] || 0;
-  const nextWeek = PLAN_5K.weeks[Math.min(progress, PLAN_5K.weeks.length-1)];
-  let bars = '';
-  PLAN_5K.weeks.forEach((w,i)=>{
-    bars += `<span class="${i<progress?'done':(i===progress?'current':'')}"></span>`;
-  });
-  let html = `<div class="eyebrow">Plan estructurado</div>
-    <div class="plan-card" data-action="start-plan-week">
-      <div class="ratio-name">${PLAN_5K.name}</div>
-      <div class="ratio-detail">${PLAN_5K.detail}</div>
+  let html = '';
+  PLANS.forEach(plan=>{
+    const progress = state.planProgress[plan.id] || 0;
+    const weekIdx = Math.min(progress, plan.weeks.length-1);
+    const w = plan.weeks[weekIdx];
+    let bars = '';
+    plan.weeks.forEach((wk,i)=>{
+      bars += `<span class="${i<progress?'done':(i===progress?'current':'')}"></span>`;
+    });
+    html += `<div class="eyebrow" style="${plan===PLANS[0]?'margin-top:0;':''}">Plan oficial</div>
+    <div class="plan-card" data-action="open-plan-detail" data-plan="${plan.id}">
+      <div class="ratio-name">${plan.name}</div>
+      <div class="ratio-detail">${plan.sessionsPerWeek}</div>
       <div class="plan-week-bar">${bars}</div>
-      <div class="ratio-detail" style="margin-top:8px;">Semana ${Math.min(progress+1, PLAN_5K.weeks.length)} de ${PLAN_5K.weeks.length} · ${nextWeek.minutes} min · trote ${nextWeek.ratio.run}s / camina ${nextWeek.ratio.walk}s</div>
-    </div>
-    <div class="eyebrow">Acerca del método</div>
+      <div class="ratio-detail" style="margin-top:8px;">Semana ${weekIdx+1} de ${plan.weeks.length}${w.isRace?' · ¡Semana de carrera!':''} · trote-camina ${w.runMin} min · domingo ${w.longMiles} mi</div>
+    </div>`;
+  });
+  html += `<div class="eyebrow">Acerca del método</div>
     <div class="ratio-card" style="cursor:default; flex-direction:column; align-items:flex-start; gap:6px;">
-      <div class="ratio-detail" style="line-height:1.6;">Basado en el método run-walk-run de Jeff Galloway: alternar trote y caminata reduce la fatiga y el riesgo de lesiones, permitiendo construir resistencia de forma progresiva semana a semana.</div>
+      <div class="ratio-detail" style="line-height:1.6;">Planes oficiales de run-walk-run de Jeff Galloway (jeffgalloway.com). Martes y jueves son sesiones de trote-camina con la relación que elijas en "Entrenamiento". Domingo es la carrera larga (objetivo en millas). Lunes/miércoles/viernes: caminata o entrenamiento cruzado sin impacto. Sábado: descanso.</div>
     </div>`;
   return html;
 }
@@ -725,8 +764,8 @@ function attachHandlers(){
   if(startFree) startFree.onclick = ()=>{
     const e = state.pre.entrenamiento;
     if(e.type==='plan'){
-      const w = PLAN_5K.weeks[e.weekNum-1];
-      startSession(w.ratio.run, w.ratio.walk, w.minutes, {planId:PLAN_5K.id, weekNum:e.weekNum});
+      const r = autoRatioForWeek(e.weekNum);
+      startSession(r.run, r.walk, e.minutes, {planId:e.planId, weekNum:e.weekNum, sessionType:e.sessionType});
     } else {
       const r = RATIOS.find(x=>x.id===e.ratioId);
       startSession(r.run, r.walk, e.minutes, null);
@@ -741,13 +780,9 @@ function attachHandlers(){
   const openAud = document.querySelector('[data-action="open-audio"]');
   if(openAud) openAud.onclick = openAudioPicker;
 
-  const startPlan = document.querySelector('[data-action="start-plan-week"]');
-  if(startPlan) startPlan.onclick = ()=>{
-    const progress = state.planProgress[PLAN_5K.id] || 0;
-    const weekIdx = Math.min(progress, PLAN_5K.weeks.length-1);
-    const w = PLAN_5K.weeks[weekIdx];
-    startSession(w.ratio.run, w.ratio.walk, w.minutes, {planId:PLAN_5K.id, weekNum:weekIdx+1});
-  };
+  document.querySelectorAll('[data-action="open-plan-detail"]').forEach(el=>{
+    el.onclick = ()=> openPlanSessionPicker(el.dataset.plan, null);
+  });
   const pauseBtn = document.querySelector('[data-action="pause"]');
   if(pauseBtn) pauseBtn.onclick = pauseToggle;
   const stopBtn = document.querySelector('[data-action="stop"]');
@@ -777,19 +812,56 @@ function openActivityPicker(){
     });
   });
 }
-function openEntrenamientoPicker(){
-  const progress = state.planProgress[PLAN_5K.id] || 0;
-  const nextWeekIdx = Math.min(progress, PLAN_5K.weeks.length-1);
-  const w = PLAN_5K.weeks[nextWeekIdx];
-  const isPlanSelected = state.pre.entrenamiento.type==='plan';
-  let body = `<div class="eyebrow" style="margin-top:0;">Plan estructurado</div>
-    <div class="pick-item ${isPlanSelected?'selected':''}" data-type="plan">
-      <div><div class="pi-name">${PLAN_5K.name} · Semana ${nextWeekIdx+1}</div><div class="pi-sub">${w.minutes} min · trote ${w.ratio.run}s / camina ${w.ratio.walk}s</div></div>
-      ${isPlanSelected?'<span class="pi-check">✓</span>':''}
+function openPlanSessionPicker(planId, closeParent){
+  const plan = getPlan(planId);
+  const progress = state.planProgress[planId] || 0;
+  const weekIdx = Math.min(progress, plan.weeks.length-1);
+  const w = plan.weeks[weekIdx];
+  const weekNum = weekIdx+1;
+  const autoRatio = autoRatioForWeek(weekNum);
+  const e = state.pre.entrenamiento;
+  const shortSel = e.type==='plan' && e.planId===planId && e.sessionType==='short';
+  const longSel = e.type==='plan' && e.planId===planId && e.sessionType==='long';
+  const longMin = estimateLongRunMinutes(w.longMiles);
+  const body = `<div class="pi-sub" style="margin-bottom:10px;">Semana ${weekNum} de ${plan.weeks.length}${w.isRace?' · ¡Semana de carrera!':''} · relación automática: <b style="color:var(--text);">${autoRatio.name} (${autoRatio.detail})</b></div>
+    <div class="pick-item ${shortSel?'selected':''}" data-session="short">
+      <div><div class="pi-name">Trote-camina (martes / jueves)</div><div class="pi-sub">${w.runMin} min</div></div>
+      ${shortSel?'<span class="pi-check">✓</span>':''}
     </div>
-    <div class="eyebrow">Relación libre</div>`;
+    <div class="pick-item ${longSel?'selected':''}" data-session="long">
+      <div><div class="pi-name">${w.isRace?'Carrera':'Carrera larga'} (domingo)</div><div class="pi-sub">${w.longMiles} mi (~${(w.longMiles*1.60934).toFixed(1)} km) · ${longMin} min estimados</div></div>
+      ${longSel?'<span class="pi-check">✓</span>':''}
+    </div>
+    <div class="gps-note" style="text-align:left;">La relación trote/caminata sube de fase automáticamente cada 2 semanas: Fase 1 (30s/1min) → Fase 2 (1min/1min) → Fase 3 (2min/1min) → Fase 4 (4min/1min) → Fase 5 (8min/2min), donde se mantiene el resto del plan. Lunes, miércoles y viernes: caminata o entrenamiento cruzado sin impacto. Sábado: descanso.</div>`;
+  openOverlay(plan.name, body, (ov)=>{
+    ov.querySelectorAll('.pick-item').forEach(el=>{
+      el.onclick = ()=>{
+        const sessionType = el.dataset.session;
+        const minutes = sessionType==='long' ? longMin : w.runMin;
+        state.pre.entrenamiento = {type:'plan', planId, weekNum, sessionType, minutes};
+        persistPre(); ov.remove();
+        if(closeParent) closeParent.remove();
+        state.screen='train'; render();
+      };
+    });
+  });
+}
+function openEntrenamientoPicker(){
+  const isPlanType = state.pre.entrenamiento.type==='plan';
+  let body = `<div class="eyebrow" style="margin-top:0;">Planes oficiales (Galloway)</div>`;
+  PLANS.forEach(plan=>{
+    const progress = state.planProgress[plan.id] || 0;
+    const weekIdx = Math.min(progress, plan.weeks.length-1);
+    const w = plan.weeks[weekIdx];
+    const sel = isPlanType && state.pre.entrenamiento.planId===plan.id;
+    body += `<div class="pick-item ${sel?'selected':''}" data-plan="${plan.id}">
+      <div><div class="pi-name">${plan.name}</div><div class="pi-sub">Semana ${weekIdx+1}/${plan.weeks.length} · ${w.runMin} min trote-camina · ${w.longMiles} mi domingo</div></div>
+      ${sel?'<span class="pi-check">✓</span>':''}
+    </div>`;
+  });
+  body += `<div class="eyebrow">Relación libre</div>`;
   RATIOS.forEach(r=>{
-    const sel = !isPlanSelected && state.pre.entrenamiento.ratioId===r.id;
+    const sel = !isPlanType && state.pre.entrenamiento.ratioId===r.id;
     body += `<div class="pick-item ${sel?'selected':''}" data-type="ratio" data-id="${r.id}">
       <div><div class="pi-name">${r.name}</div><div class="pi-sub">${r.detail}</div></div>
       ${sel?'<span class="pi-check">✓</span>':''}
@@ -797,15 +869,14 @@ function openEntrenamientoPicker(){
   });
   body += `<div class="eyebrow">Duración (relación libre)</div><div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:10px;">`;
   DURATIONS.forEach(d=>{
-    const sel = !isPlanSelected && state.pre.entrenamiento.minutes===d;
+    const sel = !isPlanType && state.pre.entrenamiento.minutes===d;
     body += `<div class="ratio-pill" data-dur="${d}" style="cursor:pointer; padding:8px 14px; ${sel?'background:var(--run); color:#fff;':''}">${d} min</div>`;
   });
   body += `</div>`;
   const ov = openOverlay('Entrenamiento', body, (ov)=>{
-    ov.querySelector('[data-type="plan"]').onclick = ()=>{
-      state.pre.entrenamiento = {type:'plan', weekNum:nextWeekIdx+1};
-      persistPre(); ov.remove(); render();
-    };
+    ov.querySelectorAll('[data-plan]').forEach(el=>{
+      el.onclick = ()=> openPlanSessionPicker(el.dataset.plan, ov);
+    });
     ov.querySelectorAll('[data-type="ratio"]').forEach(el=>{
       el.onclick = ()=>{
         const cur = state.pre.entrenamiento.type==='ratio' ? state.pre.entrenamiento.minutes : 20;
