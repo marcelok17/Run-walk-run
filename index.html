@@ -97,6 +97,15 @@
   .activity-head{display:flex; align-items:center; gap:12px; padding:14px 16px 10px;}
   .activity-head .ic-circle{width:38px; height:38px; border-radius:50%; background:var(--run-dim); display:flex; align-items:center; justify-content:center; color:var(--run); flex-shrink:0;}
   .activity-head .ic-circle.walk{color:var(--walk); background:var(--walk-dim);}
+  .delete-icon{width:32px; height:32px; border-radius:50%; display:flex; align-items:center; justify-content:center; color:var(--text-muted); font-size:14px; cursor:pointer; flex-shrink:0;}
+  .delete-icon:active{background:var(--danger-dim);}
+  .confirm-box{background:var(--surface); border-radius:18px; padding:22px; box-shadow:var(--shadow); max-width:340px; margin:auto;}
+  .confirm-box .msg{font-weight:700; font-size:15px; color:var(--text); margin-bottom:6px;}
+  .confirm-box .sub{font-size:12.5px; color:var(--text-muted); margin-bottom:18px; line-height:1.5;}
+  .confirm-box .row{display:flex; gap:10px;}
+  .confirm-box button{flex:1; padding:12px; border-radius:12px; font-weight:700; font-size:13.5px; cursor:pointer;}
+  .confirm-box .cancel{border:1.5px solid var(--line); background:var(--surface); color:var(--text);}
+  .confirm-box .ok{border:none; background:var(--danger); color:#fff;}
   .activity-title{font-weight:700; font-size:14px; color:var(--text);}
   .activity-date{font-size:11.5px; color:var(--text-muted); margin-top:1px;}
   .route-map{width:100%; height:150px; background:var(--surface-2); display:block;}
@@ -110,6 +119,19 @@
   .activity-stats div{text-align:center;}
   .as-val{font-weight:800; font-size:15px; color:var(--text);}
   .as-label{font-size:9.5px; color:var(--text-muted); text-transform:uppercase; letter-spacing:.5px; margin-top:2px; font-weight:600;}
+  .splits-toggle{text-align:center; padding:10px; font-size:12px; font-weight:700; color:var(--run); cursor:pointer; border-top:1px solid var(--line);}
+  .splits-wrap{padding:0 0 14px;}
+  .splits-tabs{display:flex; background:var(--run); margin:0 0 4px;}
+  .splits-tab{flex:1; text-align:center; padding:12px 6px; font-size:12px; font-weight:700; color:rgba(255,255,255,.6); cursor:pointer; border-bottom:3px solid transparent;}
+  .splits-tab.active{color:#fff; border-bottom-color:#fff;}
+  .split-header{display:flex; justify-content:space-between; padding:10px 16px 4px; font-size:11px; color:var(--text-muted); font-weight:600;}
+  .split-row{display:flex; align-items:center; justify-content:space-between; gap:10px; padding:10px 16px; border-bottom:1px solid var(--line);}
+  .split-tag{font-size:11px; font-weight:700; padding:3px 8px; border-radius:8px; background:var(--surface-2); color:var(--text-muted); white-space:nowrap; display:inline-block;}
+  .split-tag.run{background:var(--run-dim); color:var(--run);}
+  .split-tag.walk{background:var(--walk-dim); color:var(--walk);}
+  .split-mid{font-size:11.5px; color:var(--text-muted); margin-top:3px;}
+  .split-pace{font-size:13px; font-weight:700; color:var(--text); white-space:nowrap;}
+  .split-pace-big{font-size:17px; font-weight:800; color:var(--text); white-space:nowrap;}
 
   /* ---------- ACTIVE SESSION ---------- */
   .active{display:flex; flex-direction:column; align-items:center; padding-top:6px; animation:fadein .4s ease;}
@@ -297,6 +319,8 @@ let state = {
   planProgress:{}, // {planId: completedWeekCount}
   schedule:null, // {planId, startDate, days:[...]}
   expandedWeeks:new Set(),
+  expandedHistory:new Set(),
+  splitsTab:{},
   settings:{voice:true, gps:true, vibrate:true},
   pre:{
     activityId:'running',
@@ -307,46 +331,63 @@ let state = {
 };
 
 /* ============== STORAGE ============== */
+const Storage = {
+  async get(key){
+    if(window.storage){ try{ return await window.storage.get(key); }catch(e){} }
+    try{
+      const v = localStorage.getItem('tp_'+key);
+      return v!=null ? {key, value:v} : null;
+    }catch(e){ return null; }
+  },
+  async set(key, value){
+    if(window.storage){ try{ return await window.storage.set(key, value); }catch(e){} }
+    try{ localStorage.setItem('tp_'+key, value); }catch(e){}
+  },
+  async delete(key){
+    if(window.storage){ try{ return await window.storage.delete(key); }catch(e){} }
+    try{ localStorage.removeItem('tp_'+key); }catch(e){}
+  }
+};
 async function loadPersisted(){
   try{
-    const h = await window.storage.get('history-list');
+    const h = await Storage.get('history-list');
     state.history = h ? JSON.parse(h.value) : [];
   }catch(e){ state.history = []; }
   try{
-    const p = await window.storage.get('plan-progress');
+    const p = await Storage.get('plan-progress');
     state.planProgress = p ? JSON.parse(p.value) : {};
   }catch(e){ state.planProgress = {}; }
   try{
-    const s = await window.storage.get('settings');
+    const s = await Storage.get('settings');
     if(s) state.settings = JSON.parse(s.value);
   }catch(e){}
   try{
-    const pre = await window.storage.get('pre-selection');
+    const pre = await Storage.get('pre-selection');
     if(pre) state.pre = JSON.parse(pre.value);
   }catch(e){}
   try{
-    const sch = await window.storage.get('schedule');
+    const sch = await Storage.get('schedule');
     if(sch) state.schedule = JSON.parse(sch.value);
   }catch(e){ state.schedule = null; }
   render();
 }
 async function persistSchedule(){
   try{
-    if(state.schedule) await window.storage.set('schedule', JSON.stringify(state.schedule));
-    else await window.storage.delete('schedule');
+    if(state.schedule) await Storage.set('schedule', JSON.stringify(state.schedule));
+    else await Storage.delete('schedule');
   }catch(e){}
 }
 async function persistPre(){
-  try{ await window.storage.set('pre-selection', JSON.stringify(state.pre)); }catch(e){}
+  try{ await Storage.set('pre-selection', JSON.stringify(state.pre)); }catch(e){}
 }
 async function persistHistory(){
-  try{ await window.storage.set('history-list', JSON.stringify(state.history)); }catch(e){}
+  try{ await Storage.set('history-list', JSON.stringify(state.history)); }catch(e){}
 }
 async function persistProgress(){
-  try{ await window.storage.set('plan-progress', JSON.stringify(state.planProgress)); }catch(e){}
+  try{ await Storage.set('plan-progress', JSON.stringify(state.planProgress)); }catch(e){}
 }
 async function persistSettings(){
-  try{ await window.storage.set('settings', JSON.stringify(state.settings)); }catch(e){}
+  try{ await Storage.set('settings', JSON.stringify(state.settings)); }catch(e){}
 }
 
 /* ============== HELPERS ============== */
@@ -411,7 +452,8 @@ function startSession(runSec, walkSec, minutes, planMeta){
     totalElapsed:0, distanceKm:0, lastPos:null, paused:false,
     planMeta: planMeta || null, lastAnnounceBlock:0,
     ratioRun: runSec, ratioWalk: walkSec,
-    routePoints:[], isWalkOnly
+    routePoints:[], isWalkOnly,
+    intervalLog:[], curIntervalStartElapsed:0, curIntervalStartDist:0
   };
   startGps();
   speak(intervals[0].type==='run' ? 'Comienza a trotar' : 'Comienza a caminar');
@@ -435,7 +477,7 @@ function startGps(){
         if(d < 0.2){ state.session.distanceKm += d; } // filtro de saltos GPS irreales
       }
       state.session.lastPos = {lat:latitude, lon:longitude};
-      state.session.routePoints.push({lat:latitude, lon:longitude, d:state.session.distanceKm});
+      state.session.routePoints.push({lat:latitude, lon:longitude, d:state.session.distanceKm, t:state.session.totalElapsed});
       if(liveMapLine){ liveMapLine.addLatLng([latitude,longitude]); }
       if(liveMapInstance){ liveMapInstance.panTo([latitude,longitude], {animate:true}); }
       renderActiveStatsOnly();
@@ -464,12 +506,19 @@ function updateGpsBadge(){
 function stopGps(){
   if(state.gpsWatch!=null){ try{ navigator.geolocation.clearWatch(state.gpsWatch); }catch(e){} state.gpsWatch=null; }
 }
+function logCurrentInterval(s){
+  const type = s.intervals[s.idx].type;
+  const durationSec = s.totalElapsed - s.curIntervalStartElapsed;
+  const distKm = s.distanceKm - s.curIntervalStartDist;
+  if(durationSec>0) s.intervalLog.push({type, durationSec, distKm});
+}
 function tick(){
   const s = state.session;
   if(!s || s.paused) return;
   s.totalElapsed++;
   s.remaining--;
   if(s.remaining <= 0){
+    logCurrentInterval(s);
     s.idx++;
     if(s.idx >= s.intervals.length){
       finishSession();
@@ -477,6 +526,8 @@ function tick(){
     }
     const cur = s.intervals[s.idx];
     s.remaining = cur.seconds;
+    s.curIntervalStartElapsed = s.totalElapsed;
+    s.curIntervalStartDist = s.distanceKm;
     speak(cur.type==='run' ? 'Trota' : 'Camina');
     vibrate(cur.type==='run' ? [120] : [60,60,60]);
     render();
@@ -507,9 +558,12 @@ function pauseToggle(){
 function manualSwitch(toType){
   const s = state.session;
   if(!s || s.isWalkOnly) return;
+  logCurrentInterval(s);
   const dur = toType==='run' ? s.ratioRun : s.ratioWalk;
   s.intervals[s.idx] = {type:toType, seconds:dur};
   s.remaining = dur;
+  s.curIntervalStartElapsed = s.totalElapsed;
+  s.curIntervalStartDist = s.distanceKm;
   speak(toType==='run' ? 'Trota' : 'Camina');
   vibrate(toType==='run' ? [120] : [60,60,60]);
   render();
@@ -532,14 +586,26 @@ function estimateCalories(totalSec, runSec, walkSec){
   const met = 9.8*runFrac + 3.5*(1-runFrac);
   return Math.round(met*weightKg*hours);
 }
+function computeKmSplits(routePoints){
+  if(!routePoints || routePoints.length<2) return [];
+  const splits = [];
+  let nextKm = 1, lastT = 0;
+  routePoints.forEach(p=>{
+    if(p.d!=null && p.d>=nextKm){
+      splits.push({km:nextKm, sec: Math.max(0,(p.t||0)-lastT)});
+      lastT = p.t||0;
+      nextKm++;
+    }
+  });
+  return splits;
+}
 function finishSession(){
   clearInterval(state.timerHandle);
   stopGps();
   const s = state.session;
   let runSecTotal = 0, walkSecTotal = 0;
-  s.intervals.slice(0, s.idx+1).forEach((iv,i)=>{
-    const used = i===s.idx ? (iv.seconds - s.remaining) : iv.seconds;
-    if(iv.type==='run') runSecTotal += used; else walkSecTotal += used;
+  s.intervalLog.forEach(log=>{
+    if(log.type==='run') runSecTotal += log.durationSec; else walkSecTotal += log.durationSec;
   });
   const record = {
     date: new Date().toISOString(),
@@ -550,11 +616,13 @@ function finishSession(){
     calories: estimateCalories(s.totalElapsed, runSecTotal, walkSecTotal),
     isWalkOnly: s.isWalkOnly,
     activityId: state.pre.activityId,
+    intervalLog: s.intervalLog,
+    kmSplits: computeKmSplits(s.routePoints),
     route: downsampleRoute(s.routePoints, 120),
     planMeta: s.planMeta
   };
   state.history.unshift(record);
-  state.history = state.history.slice(0,50);
+  state.history = state.history.slice(0,200);
   persistHistory();
   if(s.planMeta && s.planMeta.sessionType==='long'){
     const cur = state.planProgress[s.planMeta.planId] || 0;
@@ -575,6 +643,7 @@ function stopSession(){
   clearInterval(state.timerHandle);
   stopGps();
   if(state.session && state.session.totalElapsed > 20){
+    logCurrentInterval(state.session);
     finishSession();
   } else {
     state.session = null;
@@ -692,8 +761,9 @@ function renderTrain(){
 function dayTypeLabel(day){
   if(day.type==='walkxt') return 'Caminata o cruzado';
   if(day.type==='rest') return 'Descanso';
-  if(day.type==='run') return `Trote-camina · ${day.runMin} min`;
-  if(day.type==='longrun') return (day.isRace?'🏁 Carrera · ':'Carrera larga · ')+day.longMiles+' mi';
+  const ratio = autoRatioForWeek(day.weekNum);
+  if(day.type==='run') return `Trote-camina · ${day.runMin} min · ${ratio.detail}`;
+  if(day.type==='longrun') return (day.isRace?'🏁 Carrera · ':'Carrera larga · ')+day.longMiles+' mi · '+ratio.detail;
   return '';
 }
 function formatDayHeader(dateStr){
@@ -767,6 +837,83 @@ function titleFor(h){
   if(h.isWalkOnly) return `${km} km Caminata`;
   return `${km} km Trote-Caminata`;
 }
+function showConfirm(message, sub, onConfirm){
+  const ov = document.createElement('div');
+  ov.className = 'settings-overlay';
+  ov.style.justifyContent = 'center';
+  ov.style.alignItems = 'center';
+  ov.innerHTML = `<div class="confirm-box">
+    <div class="msg">${message}</div>
+    <div class="sub">${sub||''}</div>
+    <div class="row">
+      <button class="cancel" id="confirmCancel">Cancelar</button>
+      <button class="ok" id="confirmOk">Eliminar</button>
+    </div>
+  </div>`;
+  document.getElementById('app').appendChild(ov);
+  document.getElementById('confirmCancel').onclick = ()=> ov.remove();
+  document.getElementById('confirmOk').onclick = ()=>{ ov.remove(); onConfirm(); };
+}
+function deleteHistoryRecord(idx){
+  const h = state.history[idx];
+  if(!h) return;
+  state.history.splice(idx,1);
+  persistHistory();
+  if(h.planMeta && h.planMeta.scheduleDate && state.schedule){
+    const day = state.schedule.days.find(d=>d.date===h.planMeta.scheduleDate);
+    if(day){ day.completed = false; persistSchedule(); }
+  }
+  if(h.planMeta && h.planMeta.sessionType==='long'){
+    const cur = state.planProgress[h.planMeta.planId];
+    if(cur === h.planMeta.weekNum){
+      state.planProgress[h.planMeta.planId] = Math.max(0, cur-1);
+      persistProgress();
+    }
+  }
+  state.expandedHistory = new Set();
+  state.splitsTab = {};
+  render();
+}
+function paceFromSecKm(sec, km){
+  if(!km || km<=0.02) return '—';
+  return fmt(sec/km)+'/km';
+}
+function renderSplits(h, idx){
+  const tab = state.splitsTab && state.splitsTab[idx] || 'km';
+  let html = '<div class="splits-wrap">';
+  html += `<div class="splits-tabs">
+    <div class="splits-tab ${tab==='km'?'active':''}" data-action="splits-tab" data-idx="${idx}" data-tab="km">Kilómetros</div>
+    <div class="splits-tab ${tab==='interval'?'active':''}" data-action="splits-tab" data-idx="${idx}" data-tab="interval">Intervalos del entrenamiento</div>
+  </div>`;
+  if(tab==='km'){
+    if(h.kmSplits && h.kmSplits.length>0){
+      html += `<div class="split-header"><span>Kilómetro</span><span>Ritmo</span></div>`;
+      h.kmSplits.forEach(s=>{
+        html += `<div class="split-row">
+          <div class="split-tag">Km ${s.km}</div>
+          <div class="split-pace-big">${fmt(s.sec)}/km</div>
+        </div>`;
+      });
+    } else {
+      html += `<div class="route-empty">Sin parciales por kilómetro para esta sesión</div>`;
+    }
+  } else {
+    if(h.intervalLog && h.intervalLog.length>0){
+      html += `<div class="split-header"><span>Intervalo</span><span>Ritmo</span></div>`;
+      h.intervalLog.forEach(log=>{
+        const pace = paceFromSecKm(log.durationSec, log.distKm);
+        html += `<div class="split-row">
+          <div><div class="split-tag ${log.type}">${log.type==='run'?'Trote':'Camina'}</div><div class="split-mid">${fmt(log.durationSec)} · ${log.distKm.toFixed(2)} km</div></div>
+          <div class="split-pace-big">${pace}</div>
+        </div>`;
+      });
+    } else {
+      html += `<div class="route-empty">Sin intervalos registrados para esta sesión</div>`;
+    }
+  }
+  html += '</div>';
+  return html;
+}
 function renderHistory(){
   if(state.history.length===0){
     return `<div class="empty-state"><div class="glyph">◷</div><p>Aún no registras sesiones.<br>Completa tu primer entrenamiento<br>para verlo aquí.</p></div>`;
@@ -777,10 +924,13 @@ function renderHistory(){
     const fecha = d.toLocaleDateString('es-CL', {day:'2-digit', month:'long', year:'numeric'}) + ' · ' + d.toLocaleTimeString('es-CL',{hour:'2-digit', minute:'2-digit'});
     const paceStr = h.distanceKm>0.05 ? fmt(h.durationSec/h.distanceKm) : '—';
     const hasRoute = h.route && h.route.length>=2;
+    const hasSplits = (h.intervalLog && h.intervalLog.length>0) || (h.kmSplits && h.kmSplits.length>0);
+    const expanded = state.expandedHistory.has(idx);
     html += `<div class="activity-card">
       <div class="activity-head">
         <div class="ic-circle ${h.isWalkOnly?'walk':''}">${h.isWalkOnly?'◇':'▷'}</div>
-        <div><div class="activity-title">${titleFor(h)}</div><div class="activity-date">${fecha}</div></div>
+        <div style="flex:1;"><div class="activity-title">${titleFor(h)}</div><div class="activity-date">${fecha}</div></div>
+        <div class="delete-icon" data-action="delete-history" data-idx="${idx}">🗑</div>
       </div>
       ${hasRoute ? `<div class="route-map" id="hmap-${idx}"></div>` : `<div class="route-empty">Sin ruta GPS registrada para esta sesión</div>`}
       <div class="activity-stats">
@@ -789,6 +939,8 @@ function renderHistory(){
         <div><div class="as-val">${paceStr}</div><div class="as-label">/km</div></div>
         <div><div class="as-val">${h.calories||0}</div><div class="as-label">calorías</div></div>
       </div>
+      ${hasSplits ? `<div class="splits-toggle" data-action="toggle-splits" data-idx="${idx}">${expanded?'Ocultar splits ▲':'Ver splits por intervalo y km ▼'}</div>` : ''}
+      ${expanded ? renderSplits(h, idx) : ''}
     </div>`;
   });
   return html;
@@ -951,6 +1103,28 @@ function attachHandlers(){
 
   document.querySelectorAll('[data-action="open-plan-detail"]').forEach(el=>{
     el.onclick = ()=> openPlanSessionPicker(el.dataset.plan, null);
+  });
+  document.querySelectorAll('[data-action="delete-history"]').forEach(el=>{
+    el.onclick = (e)=>{
+      e.stopPropagation();
+      const idx = parseInt(el.dataset.idx);
+      showConfirm('¿Eliminar este entrenamiento?', 'Se borrará del historial. Si correspondía a un día del plan, ese día quedará disponible para repetirlo.', ()=> deleteHistoryRecord(idx));
+    };
+  });
+  document.querySelectorAll('[data-action="splits-tab"]').forEach(el=>{
+    el.onclick = ()=>{
+      const idx = parseInt(el.dataset.idx);
+      state.splitsTab[idx] = el.dataset.tab;
+      render();
+    };
+  });
+  document.querySelectorAll('[data-action="toggle-splits"]').forEach(el=>{
+    el.onclick = ()=>{
+      const idx = parseInt(el.dataset.idx);
+      if(state.expandedHistory.has(idx)) state.expandedHistory.delete(idx);
+      else state.expandedHistory.add(idx);
+      render();
+    };
   });
   document.querySelectorAll('[data-action="toggle-week"]').forEach(el=>{
     el.onclick = ()=>{
