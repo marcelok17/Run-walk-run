@@ -1,7 +1,7 @@
 {
-  "name": "TROTE·PASO",
-  "short_name": "TROTE·PASO",
-  "description": "Entrenador de intervalos run-walk-run con planes Galloway, GPS y mapas",
+  "name": "KEIRO",
+  "short_name": "KEIRO",
+  "description": "Entrenador de intervalos Run-Walk-Run con planes de entrenamiento, GPS y mapas",
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",
