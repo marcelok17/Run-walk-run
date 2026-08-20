@@ -1,0 +1,2263 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>KEIRO — Run·Walk·Run</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#4456E3">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="TROTE·PASO">
+<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="icon" href="icon-192.png" type="image/png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Archivo:ital,wght@0,600;0,700;0,800;0,900;1,800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
+<style>
+  :root{
+    --bg:#F0F2FA;
+    --surface:#FFFFFF;
+    --surface-2:#F4F5FB;
+    --run:#4456E3;
+    --run-dim:#E3E7FB;
+    --walk:#16B97D;
+    --walk-dim:#DBF5EA;
+    --danger:#FF5A6E;
+    --danger-dim:#FFE3E7;
+    --go:#2ED477;
+    --text:#1B2238;
+    --text-muted:#8B90A8;
+    --line:#E7E9F3;
+    --shadow:0 4px 18px rgba(40,52,110,.08);
+    --grad-run:linear-gradient(135deg, #4456E3 0%, #7A5CFF 100%);
+    --grad-go:linear-gradient(135deg, #16B97D 0%, #2ED477 100%);
+    --display:'Archivo',sans-serif;
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+  html,body{margin:0; padding:0; background:var(--bg); color:var(--text); font-family:'Inter',sans-serif; height:100%; overflow:hidden; font-feature-settings:'tnum' 1;}
+  #app{max-width:480px; margin:0 auto; height:100vh; display:flex; flex-direction:column; position:relative; background:var(--bg);}
+
+  header{display:flex; align-items:center; justify-content:space-between; padding:18px 20px 14px; background:var(--surface); border-bottom:1px solid var(--line);}
+  .brand{font-family:var(--display); font-weight:900; font-size:20px; letter-spacing:-.5px; display:flex; align-items:center; color:var(--text); font-style:italic; text-transform:uppercase;}
+  .brand .run{background:var(--grad-run); -webkit-background-clip:text; background-clip:text; color:transparent;}
+  .brand .sep{color:var(--text-muted); margin:0 3px; font-weight:400; font-style:normal;}
+  .brand .walk{background:var(--grad-go); -webkit-background-clip:text; background-clip:text; color:transparent;}
+  .gear{width:36px; height:36px; border-radius:50%; background:var(--surface-2); display:flex; align-items:center; justify-content:center; color:var(--text-muted); cursor:pointer; font-size:16px;}
+
+  main{flex:1; overflow-y:auto; padding:18px 20px 10px; -webkit-overflow-scrolling:touch;}
+  main::-webkit-scrollbar{display:none;}
+
+  /* ---------- TRAIN SCREEN ---------- */
+  .session-pick{display:flex; flex-direction:column; gap:10px; animation:fadein .4s ease;}
+  .eyebrow{font-size:11px; font-weight:700; letter-spacing:1px; color:var(--text-muted); text-transform:uppercase; margin:18px 0 8px;}
+  .eyebrow:first-child{margin-top:0;}
+  .ratio-card{background:var(--surface); border:1.5px solid transparent; box-shadow:var(--shadow); border-radius:16px; padding:14px 16px; display:flex; align-items:center; justify-content:space-between; cursor:pointer; transition:border-color .15s, transform .1s;}
+  .ratio-card:active{transform:scale(.98);}
+  .ratio-card.selected{border-color:var(--run); background:var(--run-dim);}
+  .ratio-name{font-weight:700; font-size:15px; color:var(--text);}
+  .ratio-detail{font-size:12.5px; color:var(--text-muted); margin-top:3px;}
+  .ratio-pill{font-size:11px; font-weight:600; padding:4px 10px; border-radius:20px; background:var(--surface-2); color:var(--text-muted); white-space:nowrap;}
+
+  .plan-card{background:var(--surface); box-shadow:var(--shadow); border:1.5px solid transparent; border-radius:16px; padding:14px 16px; cursor:pointer;}
+  .plan-card .ratio-name{margin-bottom:2px;}
+  .plan-week-bar{display:flex; gap:3px; margin-top:10px;}
+  .plan-week-bar span{flex:1; height:4px; border-radius:2px; background:var(--surface-2);}
+  .plan-week-bar span.done{background:var(--walk);}
+  .plan-week-bar span.current{background:var(--run);}
+
+  .start-btn{margin-top:18px; width:100%; padding:16px; border-radius:16px; border:none; background:var(--grad-run); color:#fff; font-weight:700; font-size:16px; cursor:pointer; box-shadow:0 6px 16px rgba(68,86,227,.35);}
+  .start-btn:disabled{background:var(--surface-2); color:var(--text-muted); box-shadow:none;}
+
+  /* ---------- Slide to start ---------- */
+  .slide-track{position:relative; margin-top:18px; width:100%; height:58px; border-radius:30px; background:var(--grad-go); overflow:hidden; box-shadow:0 6px 16px rgba(46,212,119,.35); user-select:none;}
+  .slide-label{position:absolute; inset:0; display:flex; align-items:center; justify-content:center; color:#fff; font-weight:700; font-size:14.5px; letter-spacing:.2px; pointer-events:none;}
+  .slide-handle{position:absolute; top:4px; left:4px; width:50px; height:50px; border-radius:50%; background:#fff; display:flex; align-items:center; justify-content:center; color:var(--go); font-size:18px; font-weight:800; box-shadow:0 2px 6px rgba(0,0,0,.15); touch-action:none;}
+
+  /* ---------- PRE-START MENU (estilo tarjetas 2x2) ---------- */
+  .menu-grid{display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:6px;}
+  .menu-card{background:var(--surface); box-shadow:var(--shadow); border-radius:16px; padding:14px; cursor:pointer; transition:transform .1s;}
+  .menu-card:active{transform:scale(.97);}
+  .menu-card .menu-icon{font-size:16px; color:var(--run); margin-bottom:10px; display:block;}
+  .menu-card.walk-tone .menu-icon{color:var(--walk);}
+  .menu-label{font-size:11px; color:var(--text-muted); text-transform:uppercase; letter-spacing:.5px; font-weight:600;}
+  .menu-value{font-weight:700; font-size:15px; margin-top:3px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; color:var(--text);}
+
+  .pick-item{background:var(--surface); box-shadow:var(--shadow); border:1.5px solid transparent; border-radius:14px; padding:13px 14px; margin-bottom:8px; cursor:pointer; display:flex; justify-content:space-between; align-items:center;}
+  .pick-item.selected{border-color:var(--run); background:var(--run-dim);}
+  .pick-item .pi-name{font-weight:700; font-size:14px; color:var(--text);}
+  .pick-item .pi-sub{font-size:11.5px; color:var(--text-muted); margin-top:2px;}
+  .pick-item .pi-check{color:var(--run); font-weight:700;}
+  .overlay-scroll{flex:1; overflow-y:auto;}
+
+  .manual-btn{width:100%; margin-top:14px; padding:13px; border-radius:16px; border:1.5px dashed var(--line); background:var(--surface); color:var(--text-muted); font-weight:600; font-size:12.5px; letter-spacing:.2px; cursor:pointer;}
+  .manual-btn.to-run{color:var(--run); border-color:var(--run-dim);}
+  .manual-btn.to-walk{color:var(--walk); border-color:var(--walk-dim);}
+
+  .activity-card{background:var(--surface); box-shadow:var(--shadow); border-radius:18px; margin-bottom:14px; overflow:hidden;}
+  .activity-head{display:flex; align-items:center; gap:12px; padding:14px 16px 10px;}
+  .activity-head .ic-circle{width:38px; height:38px; border-radius:50%; background:var(--run-dim); display:flex; align-items:center; justify-content:center; color:var(--run); flex-shrink:0;}
+  .activity-head .ic-circle.walk{color:var(--walk); background:var(--walk-dim);}
+  .delete-icon{width:32px; height:32px; border-radius:50%; display:flex; align-items:center; justify-content:center; color:var(--text-muted); font-size:14px; cursor:pointer; flex-shrink:0;}
+  .delete-icon:active{background:var(--danger-dim);}
+  .confirm-box{background:var(--surface); border-radius:18px; padding:22px; box-shadow:var(--shadow); max-width:340px; margin:auto;}
+  .confirm-box .msg{font-weight:700; font-size:15px; color:var(--text); margin-bottom:6px;}
+  .confirm-box .sub{font-size:12.5px; color:var(--text-muted); margin-bottom:18px; line-height:1.5;}
+  .confirm-box .row{display:flex; gap:10px;}
+  .confirm-box button{flex:1; padding:12px; border-radius:12px; font-weight:700; font-size:13.5px; cursor:pointer;}
+  .confirm-box .cancel{border:1.5px solid var(--line); background:var(--surface); color:var(--text);}
+  .confirm-box .ok{border:none; background:var(--danger); color:#fff;}
+  .activity-title{font-weight:700; font-size:14px; color:var(--text);}
+  .activity-date{font-size:11.5px; color:var(--text-muted); margin-top:1px;}
+  .route-map{width:100%; height:150px; background:var(--surface-2); display:block; cursor:pointer; position:relative;}
+  .map-expand-hint{position:absolute; right:10px; top:10px; z-index:400; background:rgba(255,255,255,.92); border-radius:10px; padding:5px 10px; font-size:11px; font-weight:700; color:var(--run); box-shadow:0 2px 8px rgba(0,0,0,.12); pointer-events:none;}
+  .map-modal{position:fixed; inset:0; z-index:1000; background:var(--bg); display:flex; flex-direction:column; animation:fadein .25s ease;}
+  .map-modal-head{display:flex; align-items:center; justify-content:space-between; padding:16px 20px; background:var(--surface); border-bottom:1px solid var(--line);}
+  .map-modal-title{font-family:var(--display); font-weight:800; font-style:italic; font-size:16px;}
+  .map-modal-close{width:36px; height:36px; border-radius:50%; background:var(--surface-2); display:flex; align-items:center; justify-content:center; cursor:pointer; font-size:16px; color:var(--text);}
+  .map-modal-body{flex:1;}
+  .map-modal-stats{display:grid; grid-template-columns:1fr 1fr 1fr; padding:12px 8px calc(12px + env(safe-area-inset-bottom)); background:var(--surface); border-top:1px solid var(--line);}
+  .map-modal-stats div{text-align:center;}
+  .route-empty{width:100%; height:80px; display:flex; align-items:center; justify-content:center; color:var(--text-muted); font-size:11px; background:var(--surface-2); text-align:center; padding:0 20px;}
+  .leaflet-container{background:var(--surface-2); font-family:'Inter',sans-serif;}
+  .route-map .leaflet-container, .live-map .leaflet-container{isolation:isolate;}
+  .route-map, .live-map{isolation:isolate; z-index:0;}
+  .leaflet-control-attribution{font-size:8px !important; background:rgba(255,255,255,.75) !important; color:var(--text-muted) !important;}
+  .leaflet-control-attribution a{color:var(--text-muted) !important;}
+  .km-badge{background:var(--run); color:#fff; font-size:10px; font-weight:700; padding:2px 6px; border-radius:4px; white-space:nowrap; box-shadow:0 1px 4px rgba(0,0,0,.2);}
+  .live-map{width:100%; height:110px; border-radius:14px; overflow:hidden; margin-top:10px; box-shadow:var(--shadow);}
+  .activity-stats{display:grid; grid-template-columns:1fr 1fr 1fr 1fr; padding:14px 8px; border-top:1px solid var(--line);}
+  .activity-stats div{text-align:center;}
+  .as-val{font-family:var(--display); font-weight:800; font-size:16px; color:var(--text); font-style:italic;}
+  .as-label{font-size:9.5px; color:var(--text-muted); text-transform:uppercase; letter-spacing:.5px; margin-top:2px; font-weight:600;}
+  .splits-toggle{text-align:center; padding:10px; font-size:12px; font-weight:700; color:var(--run); cursor:pointer; border-top:1px solid var(--line);}
+  .splits-wrap{padding:0 0 14px;}
+  .splits-tabs{display:flex; background:var(--run); margin:0 0 4px;}
+  .splits-tab{flex:1; text-align:center; padding:12px 6px; font-size:12px; font-weight:700; color:rgba(255,255,255,.6); cursor:pointer; border-bottom:3px solid transparent;}
+  .splits-tab.active{color:#fff; border-bottom-color:#fff;}
+  .split-header{display:flex; justify-content:space-between; padding:10px 16px 4px; font-size:11px; color:var(--text-muted); font-weight:600;}
+  .split-row{display:flex; align-items:center; justify-content:space-between; gap:10px; padding:10px 16px; border-bottom:1px solid var(--line);}
+  .split-tag{font-size:11px; font-weight:700; padding:3px 8px; border-radius:8px; background:var(--surface-2); color:var(--text-muted); white-space:nowrap; display:inline-block;}
+  .split-tag.run{background:var(--run-dim); color:var(--run);}
+  .split-tag.walk{background:var(--walk-dim); color:var(--walk);}
+  .split-mid{font-size:11.5px; color:var(--text-muted); margin-top:3px;}
+  .split-pace{font-size:13px; font-weight:700; color:var(--text); white-space:nowrap;}
+  .split-pace-big{font-family:var(--display); font-size:18px; font-weight:800; color:var(--text); white-space:nowrap; font-style:italic;}
+
+  /* ---------- ACTIVE SESSION ---------- */
+  .active{display:flex; flex-direction:column; align-items:center; padding-top:6px; animation:fadein .4s ease;}
+  .ring-wrap{position:relative; width:200px; height:200px; margin:6px 0 4px;}
+  .ring-wrap svg{transform:rotate(-90deg);}
+  .ring-bg{fill:none; stroke:var(--surface-2); stroke-width:7;}
+  .ring-fg{fill:none; stroke-width:7; stroke-linecap:round; transition:stroke-dashoffset 1s linear, stroke .3s ease;}
+  .ring-center{position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center;}
+  .state-icon{font-size:26px; margin-bottom:6px;}
+  .state-icon.run{color:var(--run);}
+  .state-icon.walk{color:var(--walk);}
+  .state-label{font-weight:700; font-size:13px; letter-spacing:1.5px; transition:color .3s ease; text-transform:uppercase;}
+  .state-label.run{color:var(--run);}
+  .state-label.walk{color:var(--walk);}
+  .countdown{font-family:var(--display); font-size:44px; font-weight:800; margin-top:4px; color:var(--text); letter-spacing:-1px; font-style:italic;}
+  .next-up{font-size:11px; color:var(--text-muted); margin-top:6px; letter-spacing:.3px; font-weight:600;}
+
+  .pulse{animation:pulse .5s ease;}
+  @keyframes pulse{0%{transform:scale(1);}30%{transform:scale(1.05);}100%{transform:scale(1);}}
+  @keyframes fadein{from{opacity:0; transform:translateY(6px);}to{opacity:1; transform:translateY(0);}}
+
+  .stat-card{width:100%; background:var(--surface); box-shadow:var(--shadow); border-radius:18px; padding:10px 8px; margin-top:10px;}
+  .active-fixed-controls{position:fixed; bottom:calc(64px + env(safe-area-inset-bottom)); left:50%; transform:translateX(-50%); width:100%; max-width:480px; padding:10px 20px; background:linear-gradient(to top, var(--bg) 70%, transparent); z-index:5;}
+  .stat-row{display:flex; width:100%;}
+  .stat{flex:1; text-align:center; position:relative;}
+  .stat:not(:last-child)::after{content:''; position:absolute; right:0; top:10%; height:80%; width:1px; background:var(--line);}
+  .stat-val{font-family:var(--display); font-size:18px; font-weight:800; color:var(--text); font-style:italic;}
+  .stat-label{font-size:9.5px; color:var(--text-muted); text-transform:uppercase; letter-spacing:.8px; margin-top:3px; font-weight:600;}
+
+  .ctl-row{display:flex; align-items:center; justify-content:center; gap:22px; width:100%;}
+  .ctl-icon-btn{width:52px; height:52px; border-radius:50%; background:var(--surface); box-shadow:var(--shadow); display:flex; align-items:center; justify-content:center; color:var(--text-muted); font-size:18px; cursor:pointer;}
+  .ctl-icon-btn.stop{color:var(--danger);}
+  .ctl-play{width:64px; height:64px; border-radius:50%; background:var(--grad-run); display:flex; align-items:center; justify-content:center; color:#fff; font-size:22px; cursor:pointer; box-shadow:0 8px 18px rgba(68,86,227,.4);}
+  .gps-note{font-size:11px; color:var(--text-muted); margin-top:14px; text-align:center; line-height:1.5;}
+
+  /* ---------- SUMMARY ---------- */
+  .summary{text-align:center; padding-top:20px; animation:fadein .4s ease;}
+  .summary .check{width:64px; height:64px; border-radius:50%; background:var(--walk-dim); color:var(--walk); display:flex; align-items:center; justify-content:center; font-size:30px; margin:0 auto 14px;}
+  .summary h2{margin:0 0 4px; font-size:20px; font-weight:800; color:var(--text);}
+  .summary p{color:var(--text-muted); font-size:13px; margin:0 0 18px;}
+
+  /* ---------- HISTORY ---------- */
+  .empty-state{text-align:center; padding:60px 20px; color:var(--text-muted);}
+  .empty-state .glyph{font-size:34px; margin-bottom:10px;}
+  .empty-state p{font-size:13px; line-height:1.6; margin:0;}
+
+  /* ---------- NAV ---------- */
+  nav{display:flex; border-top:1px solid var(--line); background:var(--surface); padding:8px 10px calc(8px + env(safe-area-inset-bottom));}
+  .navbtn{flex:1; display:flex; flex-direction:column; align-items:center; gap:3px; padding:7px 4px; cursor:pointer; color:var(--text-muted); font-size:10.5px; letter-spacing:.2px; font-weight:600; border-radius:14px;}
+  .navbtn .ic{font-size:18px;}
+  .navbtn.active{color:var(--run); background:var(--run-dim);}
+
+  .settings-overlay{position:absolute; inset:0; background:var(--bg); display:flex; flex-direction:column; padding:20px; z-index:900; animation:fadein .25s ease;}
+  .settings-overlay h3{margin:0 0 18px; font-weight:800; color:var(--text);}
+  .toggle-row{display:flex; justify-content:space-between; align-items:center; padding:14px 0; border-bottom:1px solid var(--line);}
+  .toggle-row .lbl{font-size:14px; font-weight:600; color:var(--text);}
+  .toggle-row .sub{font-size:11.5px; color:var(--text-muted); margin-top:2px;}
+  .switch{width:44px; height:26px; border-radius:14px; background:var(--surface-2); position:relative; cursor:pointer; flex-shrink:0; border:1px solid var(--line);}
+  .switch.on{background:var(--run); border-color:var(--run);}
+  .switch::after{content:''; position:absolute; width:20px; height:20px; border-radius:50%; background:#fff; top:2px; left:2px; transition:left .2s; box-shadow:0 1px 3px rgba(0,0,0,.2);}
+  .switch.on::after{left:21px;}
+  .close-settings{margin-top:auto; padding:14px; border-radius:16px; border:1.5px solid var(--line); background:var(--surface); color:var(--text); font-weight:700; cursor:pointer;}
+</style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <div class="brand"><span class="run">KEIR</span><span class="walk">O</span></div>
+    <div class="gear" id="gearBtn">⚙</div>
+  </header>
+  <main id="main"></main>
+  <nav id="nav">
+    <div class="navbtn active" data-screen="train"><span class="ic">▷</span>Entrenar</div>
+    <div class="navbtn" data-screen="plans"><span class="ic">▤</span>Planes</div>
+    <div class="navbtn" data-screen="history"><span class="ic">◷</span>Historial</div>
+  </nav>
+</div>
+
+<script>
+/* ============== DATA: RATIOS & PLANS (framework estándar run-walk-run) ============== */
+const RATIOS = [
+  {id:'f1', name:'Fase 1 · Principiante', run:30, walk:60, detail:'30s trote / 1 min caminata'},
+  {id:'f2', name:'Fase 2', run:60, walk:60, detail:'1 min trote / 1 min caminata'},
+  {id:'f3', name:'Fase 3', run:120, walk:60, detail:'2 min trote / 1 min caminata'},
+  {id:'f4', name:'Fase 4', run:240, walk:60, detail:'4 min trote / 1 min caminata'},
+  {id:'f5', name:'Fase 5', run:480, walk:120, detail:'8 min trote / 2 min caminata'},
+];
+const DURATIONS = [10,20,30,40,45,60];
+const ACTIVITIES = [
+  {id:'running', name:'Running', detail:'Entrenamiento con intervalos de trote y caminata'},
+  {id:'walking', name:'Caminata libre', detail:'Sesión continua de caminata, sin intervalos de trote'},
+];
+const MUSIC_OPTIONS = [
+  {id:'ninguna', name:'Ninguna'},
+  {id:'spotify', name:'Spotify', link:'spotify://'},
+  {id:'apple', name:'Apple Music', link:'https://music.apple.com/'},
+  {id:'dispositivo', name:'Música del dispositivo', link:'intent:#Intent;action=android.intent.action.MUSIC_PLAYER;end'},
+];
+function openMusicApp(){
+  const m = MUSIC_OPTIONS.find(x=>x.id===state.pre.musicId);
+  if(!m || !m.link) return;
+  try{ window.location.href = m.link; }catch(e){}
+}
+const AUDIO_STATS = [
+  {id:'km', name:'Por kilómetro', detail:'Anuncia distancia y ritmo cada vez que completas 1 km'},
+  {id:'tiempo', name:'Tiempo (cada 5 min)', detail:'Anuncia el tiempo transcurrido cada 5 min'},
+  {id:'distancia', name:'Distancia (cada 5 min)', detail:'Anuncia la distancia recorrida cada 5 min'},
+  {id:'ritmo', name:'Ritmo (cada 5 min)', detail:'Anuncia el ritmo actual cada 5 min'},
+  {id:'ninguna', name:'Ninguna', detail:'Sin anuncios periódicos, solo cambios de trote/caminata'},
+];
+
+const PLANS = [
+  {
+    id:'5k-galloway', name:'Plan 5K · Run-Walk-Run', sessionsPerWeek:'Mar/Jue: trote-camina · Dom: carrera larga · Lun/Mié/Vie: caminar o XT · Sáb: descanso',
+    weeks:[
+      {n:1, runMin:15, longMiles:1},
+      {n:2, runMin:15, longMiles:1},
+      {n:3, runMin:20, longMiles:1.5},
+      {n:4, runMin:20, longMiles:1.5},
+      {n:5, runMin:25, longMiles:2},
+      {n:6, runMin:25, longMiles:2},
+      {n:7, runMin:30, longMiles:2.5},
+      {n:8, runMin:30, longMiles:2.5},
+      {n:9, runMin:30, longMiles:3},
+      {n:10, runMin:30, longMiles:3},
+      {n:11, runMin:30, longMiles:3.5},
+      {n:12, runMin:30, longMiles:3.5},
+      {n:13, runMin:30, longMiles:4},
+      {n:14, runMin:30, longMiles:4},
+      {n:15, runMin:30, longMiles:3.1, isRace:true},
+    ]
+  },
+  {
+    id:'10k-galloway', name:'Plan 10K · Run-Walk-Run', sessionsPerWeek:'Mar/Jue: trote-camina · Dom: carrera larga · Lun/Mié/Vie: caminar o XT · Sáb: descanso',
+    weeks:[
+      {n:1, runMin:25, longMiles:2},
+      {n:2, runMin:25, longMiles:2},
+      {n:3, runMin:30, longMiles:3},
+      {n:4, runMin:30, longMiles:4},
+      {n:5, runMin:35, longMiles:4},
+      {n:6, runMin:35, longMiles:5},
+      {n:7, runMin:45, longMiles:5},
+      {n:8, runMin:45, longMiles:6},
+      {n:9, runMin:45, longMiles:6},
+      {n:10, runMin:45, longMiles:7},
+      {n:11, runMin:45, longMiles:3.5},
+      {n:12, runMin:45, longMiles:4},
+      {n:13, runMin:45, longMiles:6.2, isRace:true},
+    ]
+  },
+  {
+    id:'21k-galloway', name:'Plan 21K Media Maratón · Run-Walk-Run',
+    sessionsPerWeek:'Mar/Jue: 30 min trote-camina · Vie: caminata suave · Dom: carrera larga · Lun/Mié/Sáb: descanso',
+    dayPattern:['rest','run','rest','run','walkxt','rest','longrun'],
+    weeks:[
+      {n:1, runMin:30, longMiles:3},
+      {n:2, runMin:30, longMiles:4},
+      {n:3, runMin:30, longMiles:5},
+      {n:4, runMin:30, longMiles:2.5},
+      {n:5, runMin:30, longMiles:6.5},
+      {n:6, runMin:30, longMiles:3, withMM:true},
+      {n:7, runMin:30, longMiles:8},
+      {n:8, runMin:30, longMiles:3, withMM:true},
+      {n:9, runMin:30, longMiles:9.5},
+      {n:10, runMin:30, longMiles:4},
+      {n:11, runMin:30, longMiles:11},
+      {n:12, runMin:30, longMiles:4, withMM:true},
+      {n:13, runMin:30, longMiles:12.5},
+      {n:14, runMin:30, longMiles:4, withMM:true},
+      {n:15, runMin:30, longMiles:14},
+      {n:16, runMin:30, longMiles:5},
+      {n:17, runMin:30, longMiles:13.1, isRace:true},
+      {n:18, runMin:30, longMiles:5},
+      {n:19, runMin:30, longMiles:7},
+    ]
+  },
+  {
+    id:'42k-galloway', name:'Plan 42K Maratón · Run-Walk-Run',
+    sessionsPerWeek:'Mar/Jue: 30 min trote-camina · Vie: caminata suave · Dom: carrera larga · Lun/Mié/Sáb: descanso',
+    dayPattern:['rest','run','rest','run','walkxt','rest','longrun'],
+    weeks:[
+      {n:1, runMin:30, longMiles:3},
+      {n:2, runMin:30, longMiles:4},
+      {n:3, runMin:30, longMiles:5},
+      {n:4, runMin:30, longMiles:2.5, withMM:true},
+      {n:5, runMin:30, longMiles:6},
+      {n:6, runMin:30, longMiles:3, withMM:true},
+      {n:7, runMin:30, longMiles:7.5},
+      {n:8, runMin:30, longMiles:3, withMM:true},
+      {n:9, runMin:30, longMiles:9},
+      {n:10, runMin:30, longMiles:4},
+      {n:11, runMin:30, longMiles:10.5},
+      {n:12, runMin:30, longMiles:4, withMM:true},
+      {n:13, runMin:30, longMiles:12},
+      {n:14, runMin:30, longMiles:4},
+      {n:15, runMin:30, longMiles:14},
+      {n:16, runMin:30, longMiles:5, withMM:true},
+      {n:17, runMin:30, longMiles:17},
+      {n:18, runMin:30, longMiles:5},
+      {n:19, runMin:30, longMiles:6, withMM:true},
+      {n:20, runMin:30, longMiles:20},
+      {n:21, runMin:30, longMiles:6},
+      {n:22, runMin:30, longMiles:6, withMM:true},
+      {n:23, runMin:30, longMiles:23},
+      {n:24, runMin:30, longMiles:6},
+      {n:25, runMin:30, longMiles:7},
+      {n:26, runMin:30, longMiles:26.2, isRace:true},
+      {n:27, runMin:30, longMiles:7},
+      {n:28, runMin:30, longMiles:6},
+    ]
+  }
+];
+function getPlan(id){ return PLANS.find(p=>p.id===id); }
+/* ============== MAGIC MILE ============== */
+const MILE_KM = 1.609;
+function computeMagicMilePaces(mmSec){
+  // Fórmulas de predicción de ritmo a partir de la milla (seg por milla)
+  const toKm = s => s/MILE_KM; // convertir seg/milla a seg/km
+  return {
+    mmSec,
+    date: new Date().toISOString(),
+    race5kSecKm: toKm(mmSec + 33),
+    race10kSecKm: toKm(mmSec*1.15),
+    race21kSecKm: toKm(mmSec*1.2),
+    race42kSecKm: toKm(mmSec*1.3),
+    trainSecKm: toKm(mmSec*1.3 + 38) // ritmo de entrenamiento: maratón + ~30-45s/mi
+  };
+}
+function startMagicMile(planMeta){
+  if(!state.settings.gps){
+    alert('El Magic Mile necesita el GPS activado para medir la milla (1.61 km). Actívalo en Ajustes.');
+    return;
+  }
+  const intervals = [
+    {type:'walk', seconds:300, label:'Calentamiento caminando'},
+    {type:'run', seconds:300, label:'Trote muy suave'},
+    {type:'run', seconds:15, label:'Aceleración 1'}, {type:'walk', seconds:45, label:'Recupera'},
+    {type:'run', seconds:15, label:'Aceleración 2'}, {type:'walk', seconds:45, label:'Recupera'},
+    {type:'run', seconds:15, label:'Aceleración 3'}, {type:'walk', seconds:45, label:'Recupera'},
+    {type:'run', seconds:15, label:'Aceleración 4'}, {type:'walk', seconds:45, label:'Recupera'},
+    {type:'run', seconds:5400, label:'LA MILLA · corre fuerte pero controlado', mmPhase:true},
+    {type:'walk', seconds:420, label:'Enfriamiento caminando'}
+  ];
+  const now = Date.now();
+  state.session = {
+    intervals, idx:0, remaining: intervals[0].seconds,
+    totalElapsed:0, distanceKm:0, lastPos:null, paused:false,
+    planMeta: planMeta || null, lastAnnounceBlock:0,
+    ratioRun: 0, ratioWalk: 0,
+    routePoints:[], isWalkOnly:false, isMagicMile:true,
+    intervalLog:[], curIntervalStartElapsed:0, curIntervalStartDist:0,
+    hrLog:[], _startWall: now, _pausedAt: null, _pausedTotal: 0,
+    nextKmAnnounce: 1, mmStartDist:null, mmStartElapsed:null, mmTimeSec:null
+  };
+  requestWakeLock();
+  startGps();
+  startHrPolling();
+  btReconnectSilent();
+  speak('Magic Mile. Comienza caminando cinco minutos para calentar.');
+  vibrate(200);
+  state.timerHandle = setInterval(tick, 1000);
+  state.screen = 'active';
+  render();
+}
+function estimateLongRunMinutes(miles){
+  if(state.magicMile && state.magicMile.trainSecKm){
+    return Math.round(miles * MILE_KM * state.magicMile.trainSecKm / 60);
+  }
+  return Math.round(miles*13); // sin MM: ritmo conservador genérico ~13 min/milla
+}
+function autoRatioForWeek(weekNum){
+  // Progresión conservadora: sube un nivel de relación cada 2 semanas, partiendo de la más suave
+  const stage = Math.min(Math.floor((weekNum-1)/2), RATIOS.length-1);
+  return RATIOS[stage];
+}
+function toDateStr(d){
+  return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+}
+function todayStr(){ return toDateStr(new Date()); }
+const DAY_PATTERN = ['walkxt','run','walkxt','run','walkxt','rest','longrun']; // Lun..Dom
+const DAY_NAMES = ['lunes','martes','miércoles','jueves','viernes','sábado','domingo'];
+function buildSchedule(planId, startDateStr, startWeek){
+  const plan = getPlan(planId);
+  const start = new Date(startDateStr+'T00:00:00');
+  const firstWeekIdx = Math.max(0, (startWeek||1)-1);
+  const days = [];
+  const totalWeeks = plan.weeks.length - firstWeekIdx;
+  for(let i=0;i<totalWeeks*7;i++){
+    const d = new Date(start); d.setDate(start.getDate()+i);
+    const weekIdx = firstWeekIdx + Math.floor(i/7);
+    const w = plan.weeks[weekIdx];
+    // El patrón semanal se alinea al día real de la semana; cada plan puede tener el suyo
+    const dow = (d.getDay()+6)%7; // 0=lunes ... 6=domingo
+    const type = (plan.dayPattern || DAY_PATTERN)[dow];
+    days.push({
+      date: toDateStr(d), weekNum: weekIdx+1, type,
+      runMin: type==='run' ? w.runMin : null,
+      longMiles: type==='longrun' ? w.longMiles : null,
+      isRace: type==='longrun' ? !!w.isRace : false,
+      withMM: type==='longrun' ? !!w.withMM : false,
+      completed:false
+    });
+  }
+  return {planId, startDate: startDateStr, startWeek: firstWeekIdx+1, days};
+}
+function autoSyncScheduleWithHistory(){
+  // Marca como completados los días del plan cuya fecha coincide con una sesión ya registrada
+  if(!state.schedule) return false;
+  let changed = false;
+  state.schedule.days.forEach(day=>{
+    if(day.completed) return;
+    if(day.type==='rest') return;
+    const match = state.history.find(h=>{
+      const hDate = toDateStr(new Date(h.date));
+      if(hDate !== day.date) return false;
+      // Días de trote/carrera larga: cualquier sesión trote-camina cuenta
+      if(day.type==='run' || day.type==='longrun') return !h.isWalkOnly;
+      // Días de caminata/cruzado: una caminata registrada cuenta
+      if(day.type==='walkxt') return h.isWalkOnly;
+      return false;
+    });
+    if(match){ day.completed = true; changed = true; }
+  });
+  if(changed) persistSchedule();
+  return changed;
+}
+
+/* ============== STATE ============== */
+let state = {
+  screen:'train',
+  session:null, // {intervals, idx, remaining, totalElapsed, distanceKm, lastPos, paused}
+  timerHandle:null,
+  gpsWatch:null,
+  history:[],
+  planProgress:{}, // {planId: completedWeekCount}
+  schedule:null, // {planId, startDate, days:[...]}
+  expandedWeeks:new Set(),
+  expandedHistory:new Set(),
+  splitsTab:{},
+  settings:{voice:true, gps:true, vibrate:true, proxyUrl:'', proxySecret:''},
+  btDeviceName: (function(){ try{ return localStorage.getItem('tp_bt-device-name'); }catch(e){ return null; } })(),
+  btLiveHr: null,
+  warmupDone: false,
+  pre:{
+    activityId:'running',
+    entrenamiento:{type:'ratio', ratioId:'f1', minutes:20},
+    musicId:'ninguna',
+    audioStatId:'tiempo'
+  }
+};
+
+/* ============== STORAGE ============== */
+const Storage = {
+  async get(key){
+    if(window.storage){ try{ return await window.storage.get(key); }catch(e){} }
+    try{
+      const v = localStorage.getItem('tp_'+key);
+      return v!=null ? {key, value:v} : null;
+    }catch(e){ return null; }
+  },
+  async set(key, value){
+    if(window.storage){ try{ return await window.storage.set(key, value); }catch(e){} }
+    try{ localStorage.setItem('tp_'+key, value); }catch(e){}
+  },
+  async delete(key){
+    if(window.storage){ try{ return await window.storage.delete(key); }catch(e){} }
+    try{ localStorage.removeItem('tp_'+key); }catch(e){}
+  }
+};
+async function loadPersisted(){
+  try{
+    const h = await Storage.get('history-list');
+    state.history = h ? JSON.parse(h.value) : [];
+  }catch(e){ state.history = []; }
+  try{
+    const p = await Storage.get('plan-progress');
+    state.planProgress = p ? JSON.parse(p.value) : {};
+  }catch(e){ state.planProgress = {}; }
+  try{
+    const s = await Storage.get('settings');
+    if(s) state.settings = JSON.parse(s.value);
+  }catch(e){}
+  try{
+    const pre = await Storage.get('pre-selection');
+    if(pre) state.pre = JSON.parse(pre.value);
+    // Migración: el tipo "plan" ya no existe en el selector de Entrenar
+    if(state.pre.entrenamiento && state.pre.entrenamiento.type === 'plan'){
+      state.pre.entrenamiento = {type:'ratio', ratioId:'f1', minutes:20};
+      persistPre();
+    }
+  }catch(e){}
+  try{
+    const sch = await Storage.get('schedule');
+    if(sch) state.schedule = JSON.parse(sch.value);
+  }catch(e){ state.schedule = null; }
+  try{ const mm = localStorage.getItem('tp_magic-mile'); if(mm) state.magicMile = JSON.parse(mm); }catch(e){}
+  autoSyncScheduleWithHistory();
+  render();
+}
+async function persistSchedule(){
+  try{
+    if(state.schedule) await Storage.set('schedule', JSON.stringify(state.schedule));
+    else await Storage.delete('schedule');
+  }catch(e){}
+}
+async function persistPre(){
+  try{ await Storage.set('pre-selection', JSON.stringify(state.pre)); }catch(e){}
+}
+async function persistHistory(){
+  try{ await Storage.set('history-list', JSON.stringify(state.history)); }catch(e){}
+}
+async function persistProgress(){
+  try{ await Storage.set('plan-progress', JSON.stringify(state.planProgress)); }catch(e){}
+}
+async function persistSettings(){
+  try{ await Storage.set('settings', JSON.stringify(state.settings)); }catch(e){}
+}
+
+/* ============== HELPERS ============== */
+function fmt(sec){
+  sec = Math.max(0, Math.round(sec));
+  const m = Math.floor(sec/60), s = sec%60;
+  return String(m).padStart(2,'0')+':'+String(s).padStart(2,'0');
+}
+function buildIntervals(runSec, walkSec, totalMinutes){
+  const intervals = [];
+  let elapsed = 0;
+  const totalSec = totalMinutes*60;
+  let toggleRun = true;
+  while(elapsed < totalSec){
+    const dur = toggleRun ? runSec : walkSec;
+    intervals.push({type: toggleRun?'run':'walk', seconds: dur});
+    elapsed += dur;
+    toggleRun = !toggleRun;
+  }
+  return intervals;
+}
+function speak(text){
+  if(!state.settings.voice) return;
+  try{
+    if(!('speechSynthesis' in window)) return;
+    speechSynthesis.cancel();
+    const u = new SpeechSynthesisUtterance(text);
+    u.lang = 'es-ES'; u.rate = 1.0;
+    speechSynthesis.speak(u);
+  }catch(e){}
+}
+async function notify(title, body){
+  // Notificación nativa del sistema — funciona aunque la pantalla esté bloqueada
+  if(!state.settings.voice) return;
+  if(!('Notification' in window)) return;
+  if(Notification.permission !== 'granted') return;
+  try{
+    const reg = await navigator.serviceWorker.ready;
+    reg.showNotification(title, {body, icon:'icon-192.png', tag:'trote-paso-cue', silent:false});
+  }catch(e){
+    // Fallback si el SW no está disponible
+    try{ new Notification(title, {body, icon:'icon-192.png', silent:false}); }catch(e2){}
+  }
+}
+function announceKm(km, paceSecPerKm){
+  const paceText = paceSecPerKm>0 ? fmt(paceSecPerKm).replace(':',' minutos ')+' segundos por kilómetro' : '';
+  const msg = `Kilómetro ${km}${paceText ? ' — ritmo '+paceText : ''}`;
+  speak(msg);
+  notify(`Km ${km} completado`, paceText ? `Ritmo: ${fmt(paceSecPerKm)}/km` : '');
+}
+function announceInterval(type){
+  const msg = type==='run' ? 'Trota' : 'Camina';
+  speak(msg);
+  notify(type==='run' ? '▶ Trota' : '◆ Camina', '');
+}
+function vibrate(pattern){
+  if(!state.settings.vibrate) return;
+  try{ if(navigator.vibrate) navigator.vibrate(pattern); }catch(e){}
+}
+function haversine(lat1,lon1,lat2,lon2){
+  const R=6371, toRad=d=>d*Math.PI/180;
+  const dLat=toRad(lat2-lat1), dLon=toRad(lon2-lon1);
+  const a=Math.sin(dLat/2)**2 + Math.cos(toRad(lat1))*Math.cos(toRad(lat2))*Math.sin(dLon/2)**2;
+  return R*2*Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+}
+
+/* ============== SESSION CONTROL ============== */
+function startScheduledDay(dateStr){
+  const day = state.schedule.days.find(d=>d.date===dateStr);
+  if(!day) return;
+  const r = autoRatioForWeek(day.weekNum);
+  if(day.type==='run'){
+    startSession(r.run, r.walk, day.runMin, {planId:state.schedule.planId, weekNum:day.weekNum, sessionType:'short', scheduleDate:dateStr});
+  } else if(day.type==='longrun'){
+    const minutes = estimateLongRunMinutes(day.longMiles);
+    startSession(r.run, r.walk, minutes, {planId:state.schedule.planId, weekNum:day.weekNum, sessionType:'long', scheduleDate:dateStr});
+  } else if(day.type==='walkxt'){
+    // Caminata de recuperación: continua, ritmo conversacional, 30 min sugeridos
+    startSession(0, 30*60, 30, {planId:state.schedule.planId, weekNum:day.weekNum, sessionType:'walkxt', scheduleDate:dateStr}, true);
+  }
+}
+async function fetchHeartRate(){
+  if(!state.settings.proxyUrl) return null;
+  try{
+    const r = await fetch(state.settings.proxyUrl+'/api/heartrate/current', {
+      headers: state.settings.proxySecret ? {'x-proxy-secret': state.settings.proxySecret} : {},
+      signal: AbortSignal.timeout ? AbortSignal.timeout(5000) : undefined
+    });
+    if(!r.ok) return null;
+    const data = await r.json();
+    return (data && typeof data.bpm === 'number') ? data : null;
+  }catch(e){ return null; }
+}
+function startHrPolling(){
+  if(!state.settings.proxyUrl) return;
+  state.hrPollHandle = setInterval(async ()=>{
+    if(!state.session || state.session.paused) return;
+    if(state.btLiveHr) return; // el Bluetooth ya está entregando FC — no duplicar con el NAS
+    const r = await fetchHeartRate();
+    if(r && r.bpm>30 && r.bpm<240){ state.session.hrLog.push({t: state.session.totalElapsed, bpm: r.bpm}); }
+  }, 30000);
+}
+function stopHrPolling(){
+  if(state.hrPollHandle){ clearInterval(state.hrPollHandle); state.hrPollHandle=null; }
+}
+/* ============== BLUETOOTH HEART RATE (Web Bluetooth) ============== */
+const IS_IOS = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform==='MacIntel' && navigator.maxTouchPoints>1);
+let btDevice = null, btCharacteristic = null;
+
+async function btPair(){
+  // Emparejamiento inicial — requiere gesto del usuario (botón en Ajustes). Solo una vez.
+  if(!('bluetooth' in navigator)){
+    alert('Este navegador no soporta Web Bluetooth. Usa Chrome o Samsung Internet en Android.');
+    return false;
+  }
+  try{
+    btDevice = await navigator.bluetooth.requestDevice({
+      filters:[{services:['heart_rate']}]
+    });
+    state.btDeviceName = btDevice.name || 'Sensor FC';
+    try{ localStorage.setItem('tp_bt-device-name', state.btDeviceName); }catch(e){}
+    await btConnect();
+    return true;
+  }catch(e){
+    return false; // usuario canceló o falló
+  }
+}
+async function btReconnectSilent(){
+  // Reconexión sin diálogo, usando el dispositivo previamente autorizado.
+  if(btDevice) return btConnect();
+  if(!('bluetooth' in navigator) || !navigator.bluetooth.getDevices) return false;
+  try{
+    const devices = await navigator.bluetooth.getDevices();
+    if(devices.length === 0) return false;
+    btDevice = devices[0];
+    return btConnect();
+  }catch(e){ return false; }
+}
+async function btConnect(){
+  if(!btDevice) return false;
+  try{
+    const server = await btDevice.gatt.connect();
+    const service = await server.getPrimaryService('heart_rate');
+    btCharacteristic = await service.getCharacteristic('heart_rate_measurement');
+    await btCharacteristic.startNotifications();
+    btCharacteristic.addEventListener('characteristicvaluechanged', onBtHr);
+    btDevice.addEventListener('gattserverdisconnected', ()=>{ state.btLiveHr = null; updateLiveHrDisplay(); });
+    return true;
+  }catch(e){ return false; }
+}
+function onBtHr(event){
+  const value = event.target.value;
+  const flags = value.getUint8(0);
+  const bpm = (flags & 0x01) ? value.getUint16(1, true) : value.getUint8(1);
+  if(bpm > 30 && bpm < 240){
+    state.btLiveHr = bpm;
+    if(state.session && !state.session.paused){
+      const last = state.session.hrLog[state.session.hrLog.length-1];
+      if(!last || last.t !== state.session.totalElapsed){
+        state.session.hrLog.push({t: state.session.totalElapsed, bpm});
+      }
+    }
+    updateLiveHrDisplay();
+  }
+}
+function updateLiveHrDisplay(){
+  const el = document.getElementById('liveHr');
+  if(el) el.textContent = state.btLiveHr ? '♥ '+state.btLiveHr : '—';
+}
+function btDisconnect(){
+  try{ if(btDevice && btDevice.gatt.connected) btDevice.gatt.disconnect(); }catch(e){}
+}
+
+/* ============== WAKE LOCK + VISIBILITYCHANGE ============== */
+let wakeLock = null;
+async function requestWakeLock(){
+  if(!('wakeLock' in navigator)) return;
+  try{
+    wakeLock = await navigator.wakeLock.request('screen');
+    wakeLock.addEventListener('release', ()=>{ wakeLock=null; });
+  }catch(e){}
+}
+async function releaseWakeLock(){
+  if(wakeLock){ try{ await wakeLock.release(); }catch(e){} wakeLock=null; }
+}
+
+// Al volver al frente: reenganchamos Wake Lock, recalculamos el tiempo real y reconectamos GPS
+document.addEventListener('visibilitychange', async ()=>{
+  if(document.visibilityState === 'visible'){
+    if(state.session && !state.session.paused){
+      await requestWakeLock();
+      if(state.settings.gps && state.gpsWatch == null) startGps();
+      // El timer ya usa Date.now() internamente — basta con hacer un render
+      renderActiveStatsOnly();
+    }
+  }
+});
+
+function startSession(runSec, walkSec, minutes, planMeta, forceWalkOnly){
+  const isWalkOnly = forceWalkOnly || state.pre.activityId === 'walking';
+  const intervals = isWalkOnly
+    ? [{type:'walk', seconds: minutes*60}]
+    : buildIntervals(runSec, walkSec, minutes);
+  const now = Date.now();
+  state.session = {
+    intervals, idx:0, remaining: intervals[0].seconds,
+    totalElapsed:0, distanceKm:0, lastPos:null, paused:false,
+    planMeta: planMeta || null, lastAnnounceBlock:0,
+    ratioRun: runSec, ratioWalk: walkSec,
+    routePoints:[], isWalkOnly,
+    intervalLog:[], curIntervalStartElapsed:0, curIntervalStartDist:0,
+    hrLog:[], _startWall: now, _pausedAt: null, _pausedTotal: 0,
+    nextKmAnnounce: 1  // próximo km a anunciar
+  };
+  requestWakeLock();
+  startGps();
+  startHrPolling();
+  btReconnectSilent(); // reconexión al reloj emparejado, sin diálogo — el deslizar cuenta como gesto
+  speak(intervals[0].type==='run' ? 'Comienza a trotar' : 'Comienza a caminar');
+  vibrate(200);
+  state.timerHandle = setInterval(tick, 1000);
+  state.screen = 'active';
+  render();
+}
+function startGps(){
+  state.gpsStatus = 'idle';
+  if(!state.settings.gps){ state.gpsStatus='off'; return; }
+  if(!('geolocation' in navigator)){ state.gpsStatus='unsupported'; return; }
+  state.gpsStatus = 'searching';
+  try{
+    state.gpsWatch = navigator.geolocation.watchPosition(pos=>{
+      state.gpsStatus = 'active';
+      if(!state.session || state.session.paused) return;
+      const {latitude, longitude} = pos.coords;
+      if(state.session.lastPos){
+        const d = haversine(state.session.lastPos.lat, state.session.lastPos.lon, latitude, longitude);
+        if(d < 0.2){ state.session.distanceKm += d; } // filtro de saltos GPS irreales
+      }
+      state.session.lastPos = {lat:latitude, lon:longitude};
+      state.session.routePoints.push({lat:latitude, lon:longitude, d:state.session.distanceKm, t:state.session.totalElapsed});
+      if(liveMapLine){ liveMapLine.addLatLng([latitude,longitude]); }
+      if(liveMapInstance){ liveMapInstance.panTo([latitude,longitude], {animate:true}); }
+      renderActiveStatsOnly();
+      updateGpsBadge();
+    }, err=>{
+      state.gpsStatus = err.code===1 ? 'denied' : (err.code===2 ? 'unavailable' : 'timeout');
+      updateGpsBadge();
+    }, {enableHighAccuracy:true, maximumAge:2000, timeout:15000});
+  }catch(e){ state.gpsStatus='error'; }
+  updateGpsBadge();
+}
+function gpsStatusText(){
+  const map = {
+    idle:'GPS inactivo', off:'GPS desactivado en ajustes', searching:'Buscando señal GPS…',
+    active:'GPS activo · '+(state.session?state.session.routePoints.length:0)+' puntos registrados',
+    denied:'Permiso de ubicación denegado por el navegador', unavailable:'Posición no disponible',
+    timeout:'Tiempo de espera agotado buscando GPS', unsupported:'Este navegador no soporta geolocalización',
+    error:'Error iniciando GPS'
+  };
+  return map[state.gpsStatus] || 'GPS inactivo';
+}
+function updateGpsBadge(){
+  const el = document.getElementById('gpsBadge');
+  if(el) el.textContent = gpsStatusText();
+}
+function stopGps(){
+  if(state.gpsWatch!=null){ try{ navigator.geolocation.clearWatch(state.gpsWatch); }catch(e){} state.gpsWatch=null; }
+}
+function logCurrentInterval(s){
+  const type = s.intervals[s.idx].type;
+  const durationSec = s.totalElapsed - s.curIntervalStartElapsed;
+  const distKm = Math.max(0, s.distanceKm - s.curIntervalStartDist);
+  if(durationSec>0) s.intervalLog.push({type, durationSec, distKm});
+}
+function getElapsed(s){
+  // Tiempo real transcurrido en segundos, descontando pausas
+  const pausedMs = s.paused ? (Date.now() - s._pausedAt) : 0;
+  return Math.floor((Date.now() - s._startWall - s._pausedTotal - pausedMs) / 1000);
+}
+function tick(silent=false){
+  const s = state.session;
+  if(!s || s.paused) return;
+
+  const newElapsed = getElapsed(s);
+  const delta = newElapsed - s.totalElapsed; // puede ser > 1 si se perdieron ticks
+  if(delta <= 0) return;
+  s.totalElapsed = newElapsed;
+
+  const curInt = s.intervals[s.idx];
+  // Fase Magic Mile: inicializar marcas y terminar por DISTANCIA (1.609 km), no por tiempo
+  if(curInt && curInt.mmPhase){
+    if(s.mmStartDist === null){ s.mmStartDist = s.distanceKm; s.mmStartElapsed = s.totalElapsed; }
+    const mmDist = s.distanceKm - s.mmStartDist;
+    if(mmDist >= MILE_KM){
+      s.mmTimeSec = s.totalElapsed - s.mmStartElapsed;
+      speak('¡Milla completada! Tiempo: '+fmt(s.mmTimeSec).replace(':',' minutos ')+' segundos. Camina para enfriar.');
+      notify('⚡ Magic Mile: '+fmt(s.mmTimeSec), 'Ahora enfría caminando');
+      s.remaining = 0; // fuerza el paso a la siguiente fase abajo
+    }
+  }
+
+  // Avanzar remaining restando el delta real
+  s.remaining = Math.max(0, s.remaining - delta);
+
+  if(s.remaining <= 0){
+    logCurrentInterval(s);
+    s.idx++;
+    if(s.idx >= s.intervals.length){
+      finishSession();
+      return;
+    }
+    const cur = s.intervals[s.idx];
+    s.remaining = cur.seconds;
+    s.curIntervalStartElapsed = s.totalElapsed;
+    s.curIntervalStartDist = s.distanceKm;
+    if(!silent){
+      if(cur.label){
+        speak(cur.mmPhase ? 'La milla. Corre fuerte pero controlado.' : cur.label);
+        notify(cur.mmPhase ? '⚡ LA MILLA' : cur.label, '');
+      } else {
+        announceInterval(cur.type);
+      }
+      vibrate(cur.type==='run' ? [120] : [60,60,60]);
+      render();
+      const ring = document.querySelector('.ring-wrap');
+      if(ring){ ring.classList.remove('pulse'); requestAnimationFrame(()=>ring.classList.add('pulse')); }
+    }
+    return;
+  }
+  if(!silent){
+    if(s.remaining <= 5 && s.remaining > 0 && delta === 1) speak(String(s.remaining));
+    // Aviso por kilómetro — se dispara cuando se cruza cada km
+    if(state.pre.audioStatId === 'km' && s.distanceKm >= s.nextKmAnnounce){
+      const paceSecPerKm = s.totalElapsed > 0 && s.distanceKm > 0.05 ? s.totalElapsed/s.distanceKm : 0;
+      announceKm(s.nextKmAnnounce, paceSecPerKm);
+      s.nextKmAnnounce++;
+    }
+    // Avisos periódicos cada 5 min
+    const block = Math.floor(s.totalElapsed/300);
+    if(block > s.lastAnnounceBlock && ['tiempo','distancia','ritmo'].includes(state.pre.audioStatId)){
+      s.lastAnnounceBlock = block;
+      if(state.pre.audioStatId==='tiempo'){
+        const msg = 'Tiempo '+fmt(s.totalElapsed).replace(':',' minutos ')+' segundos';
+        speak(msg); notify('⏱ Tiempo', fmt(s.totalElapsed));
+      } else if(state.pre.audioStatId==='distancia'){
+        const msg = 'Distancia '+s.distanceKm.toFixed(2)+' kilómetros';
+        speak(msg); notify('📍 Distancia', s.distanceKm.toFixed(2)+' km');
+      } else if(state.pre.audioStatId==='ritmo' && s.distanceKm>0.05){
+        const pace = fmt(s.totalElapsed/s.distanceKm);
+        speak('Ritmo '+pace.replace(':',' minutos ')+' por kilómetro');
+        notify('⚡ Ritmo', pace+'/km');
+      }
+    }
+    renderActiveStatsOnly();
+  }
+}
+function pauseToggle(){
+  if(!state.session) return;
+  const s = state.session;
+  if(!s.paused){
+    s.paused = true;
+    s._pausedAt = Date.now();
+    releaseWakeLock();
+  } else {
+    s._pausedTotal += Date.now() - s._pausedAt;
+    s._pausedAt = null;
+    s.paused = false;
+    requestWakeLock();
+  }
+  render();
+}
+function manualSwitch(toType){
+  const s = state.session;
+  if(!s || s.isWalkOnly) return;
+  logCurrentInterval(s);
+  const dur = toType==='run' ? s.ratioRun : s.ratioWalk;
+  s.intervals[s.idx] = {type:toType, seconds:dur};
+  s.remaining = dur;
+  s.curIntervalStartElapsed = s.totalElapsed;
+  s.curIntervalStartDist = s.distanceKm;
+  announceInterval(toType);
+  vibrate(toType==='run' ? [120] : [60,60,60]);
+  render();
+  const ring = document.querySelector('.ring-wrap');
+  if(ring){ ring.classList.remove('pulse'); requestAnimationFrame(()=>ring.classList.add('pulse')); }
+}
+function downsampleRoute(points, maxPoints){
+  if(points.length<=maxPoints) return points;
+  const step = points.length/maxPoints;
+  const out = [];
+  for(let i=0;i<maxPoints;i++) out.push(points[Math.floor(i*step)]);
+  out.push(points[points.length-1]);
+  return out;
+}
+function estimateCalories(totalSec, runSec, walkSec){
+  // MET: trote ~9.8, caminata ~3.5, peso asumido 70kg
+  const weightKg = 70;
+  const hours = totalSec/3600;
+  const runFrac = (runSec+walkSec)>0 ? runSec/(runSec+walkSec) : 0;
+  const met = 9.8*runFrac + 3.5*(1-runFrac);
+  return Math.round(met*weightKg*hours);
+}
+function computeKmSplits(routePoints){
+  if(!routePoints || routePoints.length<2) return [];
+  const splits = [];
+  let nextKm = 1, lastT = 0;
+  routePoints.forEach(p=>{
+    if(p.d!=null && p.d>=nextKm){
+      splits.push({km:nextKm, sec: Math.max(0,(p.t||0)-lastT)});
+      lastT = p.t||0;
+      nextKm++;
+    }
+  });
+  return splits;
+}
+/* ============== RESPALDO: EXPORTAR / IMPORTAR ============== */
+const BACKUP_KEYS = ['history-list','schedule','pre-selection','settings','plan-progress','magic-mile','bt-device-name'];
+function exportBackup(){
+  const backup = {app:'keiro', version:1, exportedAt: new Date().toISOString(), data:{}};
+  BACKUP_KEYS.forEach(k=>{
+    try{
+      const v = localStorage.getItem('tp_'+k);
+      if(v!==null) backup.data[k] = v;
+    }catch(e){}
+  });
+  // Excluir claves sensibles de IA del respaldo
+  if(backup.data['settings']){
+    try{
+      const s = JSON.parse(backup.data['settings']);
+      delete s.anthropicKey; delete s.geminiKey; delete s.proxySecret;
+      backup.data['settings'] = JSON.stringify(s);
+    }catch(e){}
+  }
+  const blob = new Blob([JSON.stringify(backup, null, 2)], {type:'application/json'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  const fecha = new Date().toISOString().slice(0,10);
+  a.href = url; a.download = `keiro-respaldo-${fecha}.json`;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(()=> URL.revokeObjectURL(url), 5000);
+  const n = state.history.length;
+  return `✓ Respaldo exportado: ${n} ${n===1?'sesión':'sesiones'}, plan y ajustes.`;
+}
+function importBackup(file, resultEl){
+  const reader = new FileReader();
+  reader.onload = ()=>{
+    try{
+      const backup = JSON.parse(reader.result);
+      if(!backup || (backup.app!=='keiro' && backup.app!=='trote-paso') || !backup.data){
+        resultEl.textContent = '✗ El archivo no es un respaldo válido de KEIRO.';
+        return;
+      }
+      const nSessions = (()=>{ try{ return JSON.parse(backup.data['history-list']||'[]').length; }catch(e){ return 0; } })();
+      showConfirm('¿Importar este respaldo?', `Contiene ${nSessions} ${nSessions===1?'sesión':'sesiones'} (exportado el ${(backup.exportedAt||'').slice(0,10)}). Reemplazará el historial, plan y ajustes actuales de este dispositivo. Las claves de IA guardadas aquí no se tocan.`, ()=>{
+        // Preservar claves sensibles actuales
+        const currentKeys = {anthropicKey: state.settings.anthropicKey, geminiKey: state.settings.geminiKey, proxySecret: state.settings.proxySecret};
+        BACKUP_KEYS.forEach(k=>{
+          if(backup.data[k]!==undefined){
+            try{ localStorage.setItem('tp_'+k, backup.data[k]); }catch(e){}
+          }
+        });
+        try{
+          const s = JSON.parse(localStorage.getItem('tp_settings')||'{}');
+          Object.assign(s, currentKeys);
+          localStorage.setItem('tp_settings', JSON.stringify(s));
+        }catch(e){}
+        location.reload(); // recargar para que todo el estado se reconstruya desde el respaldo
+      }, 'Importar');
+    }catch(e){
+      resultEl.textContent = '✗ No se pudo leer el archivo. ¿Es el .json exportado por la app?';
+    }
+  };
+  reader.readAsText(file);
+}
+
+/* ============== RANKINGS POR FRANJA DE DISTANCIA ============== */
+const DIST_BANDS = [
+  {id:'1-3', label:'1–3 km', min:1, max:3},
+  {id:'3-5', label:'3–5 km', min:3, max:5},
+  {id:'5-10', label:'5–10 km', min:5, max:10},
+  {id:'10-15', label:'10–15 km', min:10, max:15},
+  {id:'15+', label:'15+ km', min:15, max:Infinity},
+];
+function distBand(km){
+  if(km < 1) return null;
+  return DIST_BANDS.find(b=> km>=b.min && km<b.max) || null;
+}
+function paceOf(h){ return h.distanceKm>0.05 ? h.durationSec/h.distanceKm : Infinity; }
+function bandEntries(bandId, sameType){
+  // Sesiones del historial en esa franja, ordenadas por ritmo (más rápido primero)
+  return state.history
+    .filter(h=>{
+      if(h.isMagicMile) return false; // no comparable: incluye calentamiento y sprints
+      const b = distBand(h.distanceKm);
+      if(!b || b.id!==bandId) return false;
+      if(sameType!==undefined && h.isWalkOnly!==sameType) return false;
+      return true;
+    })
+    .sort((a,b)=> paceOf(a)-paceOf(b));
+}
+function rankInfo(record){
+  const b = distBand(record.distanceKm);
+  if(!b) return null;
+  const entries = bandEntries(b.id, record.isWalkOnly);
+  const idx = entries.findIndex(h=> h.date===record.date);
+  if(idx<0) return null;
+  return {band:b, rank:idx+1, total:entries.length};
+}
+function rankMessage(record){
+  const info = rankInfo(record);
+  if(!info) return '';
+  if(info.total===1) return `🏁 Primera marca registrada en ${info.band.label}`;
+  if(info.rank===1) return `🥇 ¡Nuevo récord! Tu ${info.band.label} más rápido de todos`;
+  if(info.rank===2) return `🥈 Tu 2ª mejor marca en ${info.band.label}`;
+  if(info.rank===3) return `🥉 Tu 3ª mejor marca en ${info.band.label}`;
+  return `#${info.rank} de ${info.total} en ${info.band.label}`;
+}
+
+function finishSession(){
+  clearInterval(state.timerHandle);
+  stopGps();
+  stopHrPolling();
+  releaseWakeLock();
+  const s = state.session;
+  let runSecTotal = 0, walkSecTotal = 0;
+  s.intervalLog.forEach(log=>{
+    if(log.type==='run') runSecTotal += log.durationSec; else walkSecTotal += log.durationSec;
+  });
+  let avgHr = null, maxHr = null;
+  if(s.hrLog && s.hrLog.length>0){
+    const bpms = s.hrLog.map(h=>h.bpm);
+    avgHr = Math.round(bpms.reduce((a,b)=>a+b,0)/bpms.length);
+    maxHr = Math.round(Math.max(...bpms));
+  }
+  const record = {
+    date: new Date().toISOString(),
+    durationSec: s.totalElapsed,
+    distanceKm: Math.round(s.distanceKm*100)/100,
+    runSec: runSecTotal,
+    walkSec: walkSecTotal,
+    calories: estimateCalories(s.totalElapsed, runSecTotal, walkSecTotal),
+    isWalkOnly: s.isWalkOnly,
+    isMagicMile: !!s.isMagicMile,
+    mmTimeSec: s.mmTimeSec || null,
+    warmupDone: state.warmupDone,
+    note: null,
+    activityId: state.pre.activityId,
+    intervalLog: s.intervalLog,
+    kmSplits: computeKmSplits(s.routePoints),
+    avgHr, maxHr, hrLog: s.hrLog,
+    route: downsampleRoute(s.routePoints, 120),
+    planMeta: s.planMeta
+  };
+  if(s.mmTimeSec){
+    state.magicMile = computeMagicMilePaces(s.mmTimeSec);
+    try{ localStorage.setItem('tp_magic-mile', JSON.stringify(state.magicMile)); }catch(e){}
+  }
+  state.history.unshift(record);
+  state.history = state.history.slice(0,200);
+  persistHistory();
+  if(s.planMeta && s.planMeta.sessionType==='long'){
+    const cur = state.planProgress[s.planMeta.planId] || 0;
+    state.planProgress[s.planMeta.planId] = Math.max(cur, s.planMeta.weekNum);
+    persistProgress();
+  }
+  if(s.planMeta && s.planMeta.scheduleDate && state.schedule){
+    const day = state.schedule.days.find(d=>d.date===s.planMeta.scheduleDate);
+    if(day){ day.completed = true; persistSchedule(); }
+  }
+  autoSyncScheduleWithHistory();
+  speak('Sesión completada. Buen trabajo.');
+  state.screen = 'summary';
+  state.lastSummary = record;
+  state.warmupDone = false;
+  state.session = null;
+  render();
+}
+function stopSession(){
+  clearInterval(state.timerHandle);
+  stopGps();
+  stopHrPolling();
+  releaseWakeLock();
+  if(state.session && state.session.totalElapsed > 20){
+    logCurrentInterval(state.session);
+    finishSession();
+  } else {
+    state.session = null;
+    state.screen = 'train';
+    render();
+  }
+}
+
+/* ============== RENDER ============== */
+function render(){
+  document.querySelectorAll('.navbtn').forEach(b=>{
+    b.classList.toggle('active', b.dataset.screen===state.screen || (state.screen==='active'&&b.dataset.screen==='train') || (state.screen==='summary'&&b.dataset.screen==='train'));
+  });
+  const main = document.getElementById('main');
+  if(state.screen==='train') main.innerHTML = renderTrain();
+  else if(state.screen==='plans') main.innerHTML = renderPlans();
+  else if(state.screen==='history') main.innerHTML = renderHistory();
+  else if(state.screen==='active') main.innerHTML = renderActive();
+  else if(state.screen==='summary') main.innerHTML = renderSummary();
+  attachHandlers();
+  if(state.screen==='history') initHistoryMaps();
+  else destroyHistoryMaps();
+  if(state.screen==='active') initLiveMap();
+  else destroyLiveMap();
+}
+function renderActiveStatsOnly(){
+  if(state.screen!=='active') return;
+  const s = state.session;
+  const distEl = document.getElementById('liveDist');
+  const paceEl = document.getElementById('livePace');
+  const timeEl = document.getElementById('liveTime');
+  if(distEl) distEl.textContent = s.distanceKm.toFixed(2)+' km';
+  if(timeEl) timeEl.textContent = fmt(s.totalElapsed);
+  if(paceEl){
+    if(s.distanceKm > 0.05){
+      const paceSecPerKm = s.totalElapsed / s.distanceKm;
+      paceEl.textContent = fmt(paceSecPerKm)+'/km';
+    } else { paceEl.textContent = '—'; }
+  }
+  const cd = document.getElementById('countdownNum');
+  if(cd) cd.textContent = fmt(s.remaining);
+  updateRing();
+  updateGpsBadge();
+}
+function updateRing(){
+  const s = state.session;
+  if(!s) return;
+  const circle = document.getElementById('ringFg');
+  if(!circle) return;
+  const total = s.intervals[s.idx].seconds;
+  const frac = 1 - (s.remaining/total);
+  const r = 88, C = 2*Math.PI*r;
+  circle.style.strokeDasharray = C;
+  circle.style.strokeDashoffset = C*(1-frac);
+  circle.style.stroke = s.intervals[s.idx].type==='run' ? 'var(--run)' : 'var(--walk)';
+}
+
+function entrenamientoLabel(){
+  const e = state.pre.entrenamiento;
+  const r = RATIOS.find(x=>x.id===e.ratioId) || RATIOS[0];
+  return `${r.name} · ${e.minutes} min`;
+}
+function weeklySummary(){
+  // Sesiones de los últimos 7 días
+  const cutoff = Date.now() - 7*86400000;
+  const recent = state.history.filter(h=> new Date(h.date).getTime() > cutoff);
+  if(recent.length===0) return null;
+  const km = recent.reduce((a,h)=>a+h.distanceKm,0);
+  return {count:recent.length, km:km.toFixed(1)};
+}
+function renderTrain(){
+  const musicName = MUSIC_OPTIONS.find(m=>m.id===state.pre.musicId)?.name || 'Ninguna';
+  const audioName = AUDIO_STATS.find(a=>a.id===state.pre.audioStatId)?.name || 'Ninguna';
+  const activityName = ACTIVITIES.find(a=>a.id===state.pre.activityId)?.name || 'Running';
+  let todayBanner = '';
+  if(state.schedule){
+    const today = state.schedule.days.find(d=>d.date===todayStr());
+    if(today){
+      const canStart = (today.type==='run'||today.type==='longrun'||today.type==='walkxt') && !today.completed;
+      todayBanner = `<div class="plan-card" ${canStart?`data-action="start-sched-day" data-date="${today.date}"`:''} style="margin-bottom:4px; background:var(--grad-run); border:none; color:#fff;">
+        <div class="ratio-name" style="color:#fff; font-family:var(--display); font-style:italic; font-size:16px;">HOY · ${dayTypeLabel(today)}</div>
+        <div class="ratio-detail" style="color:rgba(255,255,255,.85);">${today.completed?'Ya completado ✓':(canStart?'Toca para comenzar ▸':'Día sin cronómetro — descansa o haz tu caminata/cruzado')}</div>
+      </div>`;
+    }
+  }
+  const wk = weeklySummary();
+  const wkBanner = wk ? `<div class="ratio-detail" style="text-align:center; margin-bottom:4px;">Esta semana: <b style="color:var(--text);">${wk.count} ${wk.count===1?'sesión':'sesiones'} · ${wk.km} km</b> 🔥</div>` : '';
+  const mm = state.magicMile;
+  const mmCard = `<div class="ratio-card" data-action="start-mm" style="margin-bottom:10px; border-color:var(--walk);">
+    <div><div class="ratio-name">⚡ Magic Mile</div><div class="ratio-detail">${mm
+      ? `Última: ${fmt(mm.mmSec)} · trote objetivo ${fmt(Math.round(mm.trainSecKm))}/km · repite cada 3 semanas`
+      : 'Prueba de 1 milla para conocer tus ritmos. Puedes usar trote-caminata durante la milla: lo que se mide es el tiempo total. Recomendada desde la semana 3-4 del plan.'}</div></div>
+    <div class="pi-check" style="color:var(--walk); font-size:16px;">▶</div>
+  </div>`;
+  const warmupCard = `<div class="plan-card" style="margin-bottom:10px; cursor:default; ${state.warmupDone?'border-color:var(--walk);':''}">
+    <div style="display:flex; justify-content:space-between; align-items:center;">
+      <div class="ratio-name">🔥 Activación previa · 2 min</div>
+      <div class="ratio-pill" data-action="toggle-warmup" style="cursor:pointer; ${state.warmupDone?'background:var(--walk); color:#fff;':''}">${state.warmupDone?'✓ Realizada':'Marcar ✓'}</div>
+    </div>
+    <div class="ratio-detail" style="margin-top:6px; line-height:1.7;">
+      · Elevaciones de talón (gemelos): 12 repeticiones<br>
+      · Talón al glúteo alternado (cuádriceps): 10 por pierna<br>
+      · Círculos de tobillo: 10 por lado<br>
+      Movimientos dinámicos y suaves — el estiramiento sostenido déjalo para después de entrenar.
+    </div>
+  </div>`;
+  return `<div class="session-pick">
+    ${todayBanner}
+    ${wkBanner}
+    ${warmupCard}
+    ${mmCard}
+    <div class="eyebrow">Antes de empezar</div>
+    <div class="menu-grid">
+      <div class="menu-card" data-action="open-activity">
+        <span class="menu-icon">▷</span>
+        <div class="menu-label">Actividad</div>
+        <div class="menu-value">${activityName}</div>
+      </div>
+      <div class="menu-card walk-tone" data-action="open-entrenamiento">
+        <span class="menu-icon">▤</span>
+        <div class="menu-label">Entrenamiento</div>
+        <div class="menu-value">${entrenamientoLabel()}</div>
+      </div>
+      <div class="menu-card" data-action="open-music">
+        <span class="menu-icon">♪</span>
+        <div class="menu-label">Música</div>
+        <div class="menu-value">${musicName}${state.pre.musicId!=='ninguna'?' <span data-action="quick-open-music" style="color:var(--run); font-weight:700;">· ▶ Abrir</span>':''}</div>
+      </div>
+      <div class="menu-card walk-tone" data-action="open-audio">
+        <span class="menu-icon">♬))</span>
+        <div class="menu-label">Estadísticas de audio</div>
+        <div class="menu-value">${audioName}</div>
+      </div>
+    </div>
+    <div class="slide-track" id="slideStart">
+      <div class="slide-label">Deslizar para comenzar</div>
+      <div class="slide-handle" id="slideHandle">▶</div>
+    </div>
+  </div>`;
+}
+
+function dayTypeLabel(day){
+  if(day.type==='walkxt') return 'Caminata o cruzado sin impacto · ritmo conversacional · 30 min sugeridos';
+  if(day.type==='rest') return 'Descanso';
+  const ratio = autoRatioForWeek(day.weekNum);
+  if(day.type==='run') return `Trote-camina · ${day.runMin} min · ${ratio.detail}`;
+  if(day.type==='longrun') return (day.isRace?'🏁 Carrera · ':'Carrera larga · ')+day.longMiles+' mi'+(day.withMM?' (incluye Magic Mile)':'')+' · '+ratio.detail;
+  return '';
+}
+function formatDayHeader(dateStr){
+  const d = new Date(dateStr+'T00:00:00');
+  return DAY_NAMES[(d.getDay()+6)%7] + ' ' + d.getDate() + ' ' + d.toLocaleDateString('es-CL',{month:'short'}).replace('.','');
+}
+function renderCalendar(){
+  const sch = state.schedule;
+  const plan = getPlan(sch.planId);
+  const today = todayStr();
+  const doneCount = sch.days.filter(d=>d.completed).length;
+  const isActiveDay = d => d.type==='run'||d.type==='longrun'||d.type==='walkxt';
+  const totalTrainDays = sch.days.filter(isActiveDay).length;
+  const doneTrainDays = sch.days.filter(d=>isActiveDay(d) && d.completed).length;
+
+  // Tarjeta HOY siempre arriba
+  const todayDay = sch.days.find(d=>d.date===today);
+  let todayCard = '';
+  if(todayDay){
+    const canStart = (todayDay.type==='run'||todayDay.type==='longrun'||todayDay.type==='walkxt') && !todayDay.completed;
+    todayCard = `<div class="plan-card" ${canStart?`data-action="start-sched-day" data-date="${todayDay.date}"`:''} style="margin-bottom:14px; background:var(--grad-run); border:none;">
+      <div class="ratio-name" style="color:#fff; font-family:var(--display); font-style:italic; font-size:17px;">HOY · ${dayTypeLabel(todayDay)}</div>
+      <div class="ratio-detail" style="color:rgba(255,255,255,.85); margin-top:4px;">${todayDay.completed?'✓ Completado — ¡bien hecho!':(canStart?'▶ Toca aquí para comenzar':'Día de descanso — tu cuerpo también entrena descansando')}</div>
+    </div>`;
+  }
+
+  let html = `${todayCard}
+    <div class="ratio-card" style="cursor:default; margin-bottom:14px;">
+      <div><div class="ratio-name">${plan.name}</div><div class="ratio-detail">${doneTrainDays} de ${totalTrainDays} entrenamientos completados · inicio ${formatDayHeader(sch.startDate)}</div></div>
+      <div class="ratio-pill" style="cursor:pointer; color:var(--danger);" data-action="clear-schedule">Quitar plan</div>
+    </div>
+    <div class="eyebrow">Calendario semanal</div>`;
+
+  const weekNums = [...new Set(sch.days.map(d=>d.weekNum))];
+  weekNums.forEach(wk=>{
+    const weekDays = sch.days.filter(d=>d.weekNum===wk);
+    const expanded = state.expandedWeeks.has(wk);
+    const isCurrent = weekDays.some(d=>d.date===today);
+    const trainDays = weekDays.filter(d=>d.type==='run'||d.type==='longrun'||d.type==='walkxt');
+    const weekDone = trainDays.filter(d=>d.completed).length;
+    html += `<div class="plan-card" data-action="toggle-week" data-week="${wk}" style="margin-bottom:8px; ${isCurrent?'border:1.5px solid var(--run);':''}">
+      <div style="display:flex; justify-content:space-between; align-items:center;">
+        <div class="ratio-name">Semana ${wk}${isCurrent?' · esta semana':''}</div>
+        <div class="ratio-pill">${weekDone}/${trainDays.length} ${expanded?'▲':'▼'}</div>
+      </div>
+      <div class="ratio-detail">${formatDayHeader(weekDays[0].date)} → ${formatDayHeader(weekDays[weekDays.length-1].date)}</div>
+    </div>`;
+    if(expanded){
+      weekDays.forEach(day=>{
+        const isToday = day.date===today;
+        const isTrainDay = day.type==='run'||day.type==='longrun'||day.type==='walkxt';
+        const canStart = isTrainDay && !day.completed;
+        html += `<div class="pick-item" style="margin-left:10px; ${isToday?'border-color:var(--run);':''} ${day.completed?'opacity:.6;':''}" ${canStart?`data-action="start-sched-day" data-date="${day.date}"`:''}>
+          <div style="flex:1;"><div class="pi-name">${isToday?'HOY · ':''}${formatDayHeader(day.date)}</div><div class="pi-sub">${dayTypeLabel(day)}</div></div>
+          ${day.completed
+            ? `<span class="pi-check" data-action="unmark-day" data-date="${day.date}" style="padding:6px;">✓</span>`
+            : (isTrainDay
+                ? `<span style="display:flex; gap:6px; align-items:center;"><span class="ratio-pill" data-action="mark-day" data-date="${day.date}" style="cursor:pointer;">Marcar ✓</span><span class="pi-check" style="color:var(--run); font-size:16px;">▶</span></span>`
+                : '')}
+        </div>`;
+      });
+    }
+  });
+  return html;
+}
+function renderPlans(){
+  if(state.schedule) return renderCalendar();
+  let html = `<div class="pi-sub" style="margin-bottom:14px; line-height:1.6;">Elige un plan Run-Walk-Run y programa tu calendario completo con fechas reales. Cada día sabrás exactamente qué te toca.</div>`;
+  PLANS.forEach(plan=>{
+    html += `<div class="plan-card" style="margin-bottom:12px; cursor:default;">
+      <div class="ratio-name" style="font-family:var(--display); font-style:italic; font-size:16px;">${plan.name}</div>
+      <div class="ratio-detail" style="margin:6px 0 12px;">${plan.weeks.length} semanas · ${plan.sessionsPerWeek}</div>
+      <button class="start-btn" data-action="open-plan-detail" data-plan="${plan.id}" style="margin-top:0; padding:13px;">Comenzar este plan</button>
+    </div>`;
+  });
+  html += `<div class="eyebrow">Acerca del método</div>
+    <div class="ratio-card" style="cursor:default; flex-direction:column; align-items:flex-start; gap:6px;">
+      <div class="ratio-detail" style="line-height:1.6;">Planes de entrenamiento con el método Run-Walk-Run: intervalos programados de trote y caminata desde el primer día. La relación trote/caminata sube de fase automáticamente cada 2 semanas, comenzando conservadora para prevenir lesiones. Si ya corres, puedes iniciar el plan en una semana más avanzada.</div>
+    </div>`;
+  return html;
+}
+
+function titleFor(h){
+  const km = h.distanceKm.toFixed(1);
+  if(h.isMagicMile) return `⚡ Magic Mile ${h.mmTimeSec?fmt(h.mmTimeSec):''} · ${km} km`;
+  if(h.isWalkOnly) return `${km} km Caminata`;
+  return `${km} km Trote-Caminata`;
+}
+function showConfirm(message, sub, onConfirm, okLabel){
+  const ov = document.createElement('div');
+  ov.className = 'settings-overlay';
+  ov.style.justifyContent = 'center';
+  ov.style.alignItems = 'center';
+  ov.innerHTML = `<div class="confirm-box">
+    <div class="msg">${message}</div>
+    <div class="sub">${sub||''}</div>
+    <div class="row">
+      <button class="cancel" id="confirmCancel">Cancelar</button>
+      <button class="ok" id="confirmOk">${okLabel||'Eliminar'}</button>
+    </div>
+  </div>`;
+  document.getElementById('app').appendChild(ov);
+  document.getElementById('confirmCancel').onclick = ()=> ov.remove();
+  document.getElementById('confirmOk').onclick = ()=>{ ov.remove(); onConfirm(); };
+}
+function deleteHistoryRecord(idx){
+  const h = state.history[idx];
+  if(!h) return;
+  state.history.splice(idx,1);
+  persistHistory();
+  if(h.planMeta && h.planMeta.scheduleDate && state.schedule){
+    const day = state.schedule.days.find(d=>d.date===h.planMeta.scheduleDate);
+    if(day){ day.completed = false; persistSchedule(); }
+  }
+  if(h.planMeta && h.planMeta.sessionType==='long'){
+    const cur = state.planProgress[h.planMeta.planId];
+    if(cur === h.planMeta.weekNum){
+      state.planProgress[h.planMeta.planId] = Math.max(0, cur-1);
+      persistProgress();
+    }
+  }
+  state.expandedHistory = new Set();
+  state.splitsTab = {};
+  render();
+}
+function paceFromSecKm(sec, km){
+  if(!km || km<=0.02) return '—';
+  return fmt(sec/km)+'/km';
+}
+function renderSplits(h, idx){
+  const tab = state.splitsTab && state.splitsTab[idx] || 'km';
+  let html = '<div class="splits-wrap">';
+  html += `<div class="splits-tabs">
+    <div class="splits-tab ${tab==='km'?'active':''}" data-action="splits-tab" data-idx="${idx}" data-tab="km">Kilómetros</div>
+    <div class="splits-tab ${tab==='interval'?'active':''}" data-action="splits-tab" data-idx="${idx}" data-tab="interval">Intervalos del entrenamiento</div>
+  </div>`;
+  if(tab==='km'){
+    if(h.kmSplits && h.kmSplits.length>0){
+      html += `<div class="split-header"><span>Kilómetro</span><span>Ritmo</span></div>`;
+      h.kmSplits.forEach(s=>{
+        html += `<div class="split-row">
+          <div class="split-tag">Km ${s.km}</div>
+          <div class="split-pace-big">${fmt(s.sec)}/km</div>
+        </div>`;
+      });
+    } else {
+      html += `<div class="route-empty">Sin parciales por kilómetro para esta sesión</div>`;
+    }
+  } else {
+    if(h.intervalLog && h.intervalLog.length>0){
+      html += `<div class="split-header"><span>Intervalo</span><span>Ritmo</span></div>`;
+      h.intervalLog.forEach(log=>{
+        const pace = paceFromSecKm(log.durationSec, log.distKm);
+        html += `<div class="split-row">
+          <div><div class="split-tag ${log.type}">${log.type==='run'?'Trote':'Camina'}</div><div class="split-mid">${fmt(log.durationSec)} · ${log.distKm.toFixed(2)} km</div></div>
+          <div class="split-pace-big">${pace}</div>
+        </div>`;
+      });
+    } else {
+      html += `<div class="route-empty">Sin intervalos registrados para esta sesión</div>`;
+    }
+  }
+  html += '</div>';
+  return html;
+}
+function renderHistory(){
+  if(state.history.length===0){
+    return `<div class="empty-state"><div class="glyph">◷</div><p>Aún no registras sesiones.<br>Completa tu primer entrenamiento<br>para verlo aquí.</p></div>`;
+  }
+  let html = '';
+  // Análisis IA
+  const aiConfigured = state.settings.proxyUrl || state.settings.anthropicKey;
+  html += `<div class="plan-card" style="margin-bottom:12px; cursor:default;">
+    <div class="ratio-name" style="font-family:var(--display); font-style:italic;">🧠 Análisis de tu progresión</div>
+    ${state.aiInsight
+      ? `<div class="ratio-detail" style="margin-top:8px; line-height:1.65; color:var(--text);">${state.aiInsight}</div>`
+      : `<div class="ratio-detail" style="margin-top:4px;">${aiConfigured?'Análisis honesto de tus tendencias con IA.':'Configura tu clave de Anthropic o el proxy del NAS en Ajustes ⚙ para activarlo.'}</div>`}
+    ${aiConfigured ? `<button class="start-btn" data-action="ai-analyze" style="margin-top:10px; padding:12px;" ${state.aiLoading?'disabled':''}>${state.aiLoading?'Analizando…':(state.aiInsight?'Actualizar análisis':'Analizar mi progresión')}</button>` : ''}
+  </div>`;
+  // Récords por franja
+  const recordBands = DIST_BANDS.map(b=>{
+    const best = bandEntries(b.id, false)[0];
+    return best ? {band:b, best} : null;
+  }).filter(Boolean);
+  if(recordBands.length>0){
+    html += `<div class="eyebrow">🏆 Tus récords por distancia</div>`;
+    recordBands.forEach(({band,best})=>{
+      const d = new Date(best.date);
+      html += `<div class="ratio-card" style="cursor:default; margin-bottom:8px;">
+        <div><div class="ratio-name">${band.label}</div><div class="ratio-detail">${best.distanceKm.toFixed(2)} km · ${d.toLocaleDateString('es-CL',{day:'2-digit',month:'short'})}</div></div>
+        <div class="split-pace-big">${fmt(paceOf(best))}/km</div>
+      </div>`;
+    });
+    html += `<div class="eyebrow">Historial de sesiones</div>`;
+  }
+  state.history.forEach((h,idx)=>{
+    const d = new Date(h.date);
+    const fecha = d.toLocaleDateString('es-CL', {day:'2-digit', month:'long', year:'numeric'}) + ' · ' + d.toLocaleTimeString('es-CL',{hour:'2-digit', minute:'2-digit'});
+    const paceStr = h.distanceKm>0.05 ? fmt(h.durationSec/h.distanceKm) : '—';
+    const hasRoute = h.route && h.route.length>=2;
+    const hasSplits = (h.intervalLog && h.intervalLog.length>0) || (h.kmSplits && h.kmSplits.length>0);
+    const expanded = state.expandedHistory.has(idx);
+    const info = rankInfo(h);
+    const medal = info && info.total>1 ? (info.rank===1?'🥇':info.rank===2?'🥈':info.rank===3?'🥉':'') : '';
+    html += `<div class="activity-card">
+      <div class="activity-head">
+        <div class="ic-circle ${h.isWalkOnly?'walk':''}">${h.isWalkOnly?'◇':'▷'}</div>
+        <div style="flex:1;"><div class="activity-title">${medal?medal+' ':''}${titleFor(h)}</div><div class="activity-date">${fecha}${info?` · #${info.rank} en ${info.band.label}`:''}</div></div>
+        <div class="delete-icon" data-action="edit-note" data-idx="${idx}" style="font-size:15px;">📝</div>
+        <div class="delete-icon" data-action="delete-history" data-idx="${idx}">🗑</div>
+      </div>
+      ${h.note ? `<div class="ratio-detail" style="padding:0 16px 10px; font-style:italic; line-height:1.5;">"${h.note}"</div>` : ''}
+      ${hasRoute ? `<div style="position:relative;"><div class="map-expand-hint">⤢ Ampliar</div><div class="route-map" id="hmap-${idx}" data-action="expand-map" data-idx="${idx}"></div></div>` : `<div class="route-empty">Sin ruta GPS registrada para esta sesión</div>`}
+      <div class="activity-stats">
+        <div><div class="as-val">${h.distanceKm.toFixed(2)}</div><div class="as-label">km</div></div>
+        <div><div class="as-val">${fmt(h.durationSec)}</div><div class="as-label">tiempo</div></div>
+        <div><div class="as-val">${paceStr}</div><div class="as-label">/km</div></div>
+        <div><div class="as-val">${h.calories||0}</div><div class="as-label">calorías</div></div>
+      </div>
+      ${h.avgHr ? `<div class="activity-stats" style="grid-template-columns:1fr 1fr; border-top:1px solid var(--line); padding-top:10px;">
+        <div><div class="as-val" style="color:var(--danger);">♥ ${h.avgHr}</div><div class="as-label">FC promedio</div></div>
+        <div><div class="as-val" style="color:var(--danger);">♥ ${h.maxHr}</div><div class="as-label">FC máxima</div></div>
+      </div>` : ''}
+      ${hasSplits ? `<div class="splits-toggle" data-action="toggle-splits" data-idx="${idx}">${expanded?'Ocultar splits ▲':'Ver splits por intervalo y km ▼'}</div>` : ''}
+      ${expanded ? renderSplits(h, idx) : ''}
+    </div>`;
+  });
+  return html;
+}
+let historyMaps = [];
+let liveMapInstance = null, liveMapLine = null;
+function destroyLiveMap(){
+  if(liveMapInstance){ try{ liveMapInstance.remove(); }catch(e){} liveMapInstance=null; liveMapLine=null; }
+}
+function initLiveMap(){
+  destroyLiveMap();
+  if(typeof L === 'undefined' || !state.settings.gps) return;
+  const el = document.getElementById('liveMap');
+  const s = state.session;
+  if(!el || !s) return;
+  liveMapInstance = L.map(el, {zoomControl:false, attributionControl:true, scrollWheelZoom:false});
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {attribution:'© OpenStreetMap contributors', maxZoom:19}).addTo(liveMapInstance);
+  const coords = s.routePoints.map(p=>[p.lat,p.lon]);
+  liveMapLine = L.polyline(coords, {color: s.intervals[s.idx].type==='run' ? '#4456E3':'#16B97D', weight:4, lineCap:'round'}).addTo(liveMapInstance);
+  requestAnimationFrame(()=>{
+    liveMapInstance.invalidateSize();
+    if(coords.length>1) liveMapInstance.fitBounds(L.latLngBounds(coords), {padding:[20,20], maxZoom:17});
+    else if(coords.length===1) liveMapInstance.setView(coords[0], 17);
+    else liveMapInstance.setView([-33.02,-71.55], 13); // vista por defecto: Viña del Mar
+  });
+}
+function destroyHistoryMaps(){
+  historyMaps.forEach(m=>{ try{ m.remove(); }catch(e){} });
+  historyMaps = [];
+}
+let expandedMapInstance = null;
+function openMapModal(idx){
+  const h = state.history[idx];
+  if(!h || !h.route || h.route.length<2 || typeof L === 'undefined') return;
+  destroyHistoryMaps(); // evitar que los panes de los mini-mapas se superpongan al modal
+  const modal = document.createElement('div');
+  modal.className = 'map-modal';
+  const paceStr = h.distanceKm>0.05 ? fmt(h.durationSec/h.distanceKm) : '—';
+  modal.innerHTML = `
+    <div class="map-modal-head">
+      <div class="map-modal-title">${titleFor(h)}</div>
+      <div class="map-modal-close" id="mapModalClose">✕</div>
+    </div>
+    <div class="map-modal-body" id="expandedMap"></div>
+    <div class="map-modal-stats">
+      <div><div class="as-val">${h.distanceKm.toFixed(2)}</div><div class="as-label">km</div></div>
+      <div><div class="as-val">${fmt(h.durationSec)}</div><div class="as-label">tiempo</div></div>
+      <div><div class="as-val">${paceStr}</div><div class="as-label">/km</div></div>
+    </div>`;
+  document.getElementById('app').appendChild(modal);
+  const close = ()=>{
+    if(expandedMapInstance){ try{ expandedMapInstance.remove(); }catch(e){} expandedMapInstance=null; }
+    modal.remove();
+    if(state.screen==='history') initHistoryMaps(); // restaurar los mini-mapas
+  };
+  document.getElementById('mapModalClose').onclick = close;
+  requestAnimationFrame(()=>{
+    const el = document.getElementById('expandedMap');
+    const coords = h.route.map(p=>[p.lat,p.lon]);
+    expandedMapInstance = L.map(el, {zoomControl:true, attributionControl:true});
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {attribution:'© OpenStreetMap contributors', maxZoom:19}).addTo(expandedMapInstance);
+    L.polyline(coords, {color:'#4456E3', weight:5, lineCap:'round', lineJoin:'round'}).addTo(expandedMapInstance);
+    L.circleMarker(coords[0], {radius:7, color:'#fff', weight:2, fillColor:'#16B97D', fillOpacity:1}).addTo(expandedMapInstance);
+    L.circleMarker(coords[coords.length-1], {radius:7, color:'#fff', weight:2, fillColor:'#FF5A6E', fillOpacity:1}).addTo(expandedMapInstance);
+    let nextKm = 1, lastD = 0;
+    h.route.forEach(p=>{
+      if(p.d!=null && p.d>=nextKm && lastD<nextKm){
+        L.marker([p.lat,p.lon], {icon: L.divIcon({className:'', html:`<div class="km-badge">${nextKm}km</div>`, iconSize:[36,18], iconAnchor:[18,9]})}).addTo(expandedMapInstance);
+        nextKm++;
+      }
+      if(p.d!=null) lastD = p.d;
+    });
+    expandedMapInstance.invalidateSize();
+    expandedMapInstance.fitBounds(L.latLngBounds(coords), {padding:[30,30]});
+  });
+}
+function initHistoryMaps(){
+  destroyHistoryMaps();
+  if(typeof L === 'undefined') return; // sin conexión: Leaflet no cargó
+  state.history.forEach((h,idx)=>{
+    const el = document.getElementById('hmap-'+idx);
+    if(!el || !h.route || h.route.length<2) return;
+    const coords = h.route.map(p=>[p.lat,p.lon]);
+    const map = L.map(el, {zoomControl:false, dragging:false, scrollWheelZoom:false, doubleClickZoom:false, boxZoom:false, keyboard:false, touchZoom:false, attributionControl:true});
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution:'© OpenStreetMap contributors', maxZoom:19
+    }).addTo(map);
+    L.polyline(coords, {color:'#4456E3', weight:4, lineCap:'round', lineJoin:'round'}).addTo(map);
+    L.circleMarker(coords[0], {radius:6, color:'#fff', weight:2, fillColor:'#16B97D', fillOpacity:1}).addTo(map);
+    L.circleMarker(coords[coords.length-1], {radius:6, color:'#fff', weight:2, fillColor:'#FF5A6E', fillOpacity:1}).addTo(map);
+    let nextKm = 1, lastD = 0;
+    h.route.forEach(p=>{
+      if(p.d!=null && p.d>=nextKm && lastD<nextKm){
+        L.marker([p.lat,p.lon], {icon: L.divIcon({className:'', html:`<div class="km-badge">${nextKm}km</div>`, iconSize:[36,18], iconAnchor:[18,28]})}).addTo(map);
+        nextKm++;
+      }
+      if(p.d!=null) lastD = p.d;
+    });
+    map.fitBounds(L.latLngBounds(coords), {padding:[16,16]});
+    map.on('click', ()=> openMapModal(idx));
+    historyMaps.push(map);
+  });
+}
+
+function renderActive(){
+  const s = state.session;
+  const cur = s.intervals[s.idx];
+  const r = 88, C = 2*Math.PI*r;
+  return `<div class="active" style="padding-bottom:90px;">
+    <div class="ring-wrap">
+      <svg width="200" height="200" viewBox="0 0 200 200">
+        <circle class="ring-bg" cx="100" cy="100" r="${r}"/>
+        <circle id="ringFg" class="ring-fg" cx="100" cy="100" r="${r}" stroke-dasharray="${C}" stroke-dashoffset="0" stroke="${cur.type==='run'?'var(--run)':'var(--walk)'}"/>
+      </svg>
+      <div class="ring-center">
+        <div class="state-icon ${cur.type}">${cur.type==='run'?'▶':'◆'}</div>
+        <div class="countdown" id="countdownNum" style="font-size:36px;">${fmt(s.remaining)}</div>
+        <div class="state-label ${cur.type}">${cur.type==='run'?'Trota':'Camina'}</div>
+        <div class="next-up">${s.idx+1 < s.intervals.length ? 'Siguiente: '+(s.intervals[s.idx+1].type==='run'?'trote':'caminata') : 'Último intervalo'}</div>
+      </div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-row">
+        <div class="stat"><div class="stat-val" id="liveTime" style="font-size:15px;">${fmt(s.totalElapsed)}</div><div class="stat-label">Tiempo</div></div>
+        <div class="stat"><div class="stat-val" id="liveDist" style="font-size:15px;">${s.distanceKm.toFixed(2)} km</div><div class="stat-label">Distancia</div></div>
+        <div class="stat"><div class="stat-val" id="livePace" style="font-size:15px;">—</div><div class="stat-label">Ritmo</div></div>
+        <div class="stat"><div class="stat-val" id="liveHr" style="font-size:15px; color:var(--danger);">${state.btLiveHr ? '♥ '+state.btLiveHr : '—'}</div><div class="stat-label">FC</div></div>
+      </div>
+    </div>
+    ${state.settings.gps ? '<div class="live-map" id="liveMap"></div>' : ''}
+    <div class="gps-note" id="gpsBadge" style="margin-top:6px; margin-bottom:4px;">${gpsStatusText()}</div>
+    <div class="active-fixed-controls">
+      <div class="ctl-row">
+        <div class="ctl-icon-btn stop" data-action="stop" style="box-shadow:var(--shadow);">■</div>
+        <div class="ctl-play" data-action="pause">${s.paused?'▶':'❙❙'}</div>
+        ${!s.isWalkOnly ? `<div class="ctl-icon-btn" data-action="manual-switch" data-to="${cur.type==='run'?'walk':'run'}" style="box-shadow:var(--shadow);">⇄</div>` : `<div style="width:52px;"></div>`}
+      </div>
+    </div>
+  </div>`;
+}
+
+function renderSummary(){
+  const r = state.lastSummary;
+  const rankMsg = rankMessage(r);
+  const mm = r.mmTimeSec && state.magicMile ? state.magicMile : null;
+  return `<div class="summary">
+    <div class="check">${r.isMagicMile?'⚡':'✓'}</div>
+    <h2>${r.isMagicMile?'Magic Mile completado':'Sesión completada'}</h2>
+    <p>Trote ${Math.round(r.runSec)}s / Caminata ${Math.round(r.walkSec)}s</p>
+    ${mm ? `<div class="plan-card" style="cursor:default; margin-bottom:14px; text-align:left;">
+      <div class="ratio-name" style="font-family:var(--display); font-style:italic;">⚡ Tu milla: ${fmt(mm.mmSec)}</div>
+      <div class="ratio-detail" style="margin-top:8px; line-height:1.8;">
+        Ritmos que predice esta marca:<br>
+        · Carrera 5K: <b style="color:var(--text);">${fmt(Math.round(mm.race5kSecKm))}/km</b><br>
+        · Carrera 10K: <b style="color:var(--text);">${fmt(Math.round(mm.race10kSecKm))}/km</b><br>
+        · Media maratón: <b style="color:var(--text);">${fmt(Math.round(mm.race21kSecKm))}/km</b><br>
+        · Maratón: <b style="color:var(--text);">${fmt(Math.round(mm.race42kSecKm))}/km</b><br>
+        · <b style="color:var(--run);">Tu trote de entrenamiento: ${fmt(Math.round(mm.trainSecKm))}/km</b>
+      </div>
+      <div class="ratio-detail" style="margin-top:8px;">Las carreras largas del plan ahora se estiman con TU ritmo real. Repite el Magic Mile cada 3 semanas.</div>
+    </div>` : ''}
+    ${rankMsg && !mm ? `<div class="plan-card" style="cursor:default; margin-bottom:14px; background:var(--grad-go); border:none;"><div class="ratio-name" style="color:#fff; font-family:var(--display); font-style:italic;">${rankMsg}</div></div>` : ''}
+    <div class="stat-card" style="margin-top:0;">
+      <div class="stat-row">
+        <div class="stat"><div class="stat-val">${fmt(r.durationSec)}</div><div class="stat-label">Tiempo</div></div>
+        <div class="stat"><div class="stat-val">${r.distanceKm.toFixed(2)} km</div><div class="stat-label">Distancia</div></div>
+        ${r.avgHr ? `<div class="stat"><div class="stat-val" style="color:var(--danger);">♥ ${r.avgHr}</div><div class="stat-label">FC prom</div></div>` : ''}
+      </div>
+    </div>
+    <div class="plan-card" style="cursor:default; margin-bottom:14px; text-align:left;">
+      <div class="ratio-name" style="font-size:14px;">📝 ¿Cómo te sentiste?</div>
+      <div class="ratio-detail" style="margin:4px 0 8px;">Molestias, contracturas, sensaciones — la IA las considera en tu análisis.</div>
+      <textarea id="sessionNote" placeholder="Ej: pequeña contractura en el gemelo derecho en el último intervalo" style="width:100%; min-height:70px; padding:10px; border-radius:12px; border:1.5px solid var(--line); background:var(--surface-2); color:var(--text); font-family:'Inter',sans-serif; font-size:13px; resize:vertical;">${(state.history[0]&&state.history[0].note)||''}</textarea>
+      <button class="manual-btn" id="saveNoteBtn" style="border-style:solid; margin-top:8px;">Guardar nota</button>
+      <div id="noteSaved" class="pi-sub" style="margin-top:6px;"></div>
+    </div>
+    <button class="start-btn" data-action="back-train">Volver a entrenar</button>
+  </div>`;
+}
+
+/* ============== ANÁLISIS IA DE PROGRESIÓN ============== */
+function compactHistoryForAI(){
+  const payload = {
+    sesiones: state.history.slice(0, 40).map(h => {
+      const splits = h.kmSplits||[];
+      return {
+        f: h.date.slice(0,10),
+        km: Math.round(h.distanceKm*10)/10,
+        min: Math.round(h.durationSec/60),
+        ritmo: h.distanceKm>0.05 ? Math.round(h.durationSec/h.distanceKm) : null,
+        tipo: h.isMagicMile ? 'MM' : (h.isWalkOnly ? 'cam' : 'tc'),
+        fc: h.avgHr || undefined, fcMax: h.maxHr || undefined,
+        calent: h.warmupDone===true ? 1 : (h.warmupDone===false ? 0 : undefined),
+        nota: h.note || undefined,
+        km1: splits.length>0 ? Math.round(splits[0].sec) : undefined,
+        kmFin: splits.length>1 ? Math.round(splits[splits.length-1].sec) : undefined
+      };
+    })
+  };
+  if(state.magicMile){
+    payload.magicMile = {
+      fecha: state.magicMile.date ? state.magicMile.date.slice(0,10) : null,
+      tiempoMillaSeg: state.magicMile.mmSec,
+      ritmoEntrenamientoSegKm: Math.round(state.magicMile.trainSecKm),
+      ritmo5kSegKm: Math.round(state.magicMile.race5kSecKm)
+    };
+  }
+  if(state.schedule){
+    const plan = getPlan(state.schedule.planId);
+    const doneDays = state.schedule.days.filter(d=>d.completed).length;
+    payload.planActivo = {nombre: plan.name, semanaInicio: state.schedule.startWeek, diasCompletados: doneDays};
+  }
+  return payload;
+}
+const AI_SYSTEM_PROMPT = `Analista de entrenamiento del método Run-Walk-Run (intervalos programados trote/caminata). Fundamenta TODO en estos principios, no en consejos genéricos:
+1. Pausas de caminata = herramienta central, no debilidad. Nunca sugieras "aguantar sin caminar" como progreso.
+2. Prevención de lesión > velocidad: tendones/músculos se adaptan más lento que el corazón. Ante señales de exceso: bajar, no subir.
+3. Entrenar a ritmo conversacional. FC alta sostenida en días normales = advertir.
+4. Magic Mile (MM) es la brújula: 5K=MM+33s/mi; 10K=MM×1.15; 21K=MM×1.2; 42K=MM×1.3; entreno diario=ritmo 42K+30-45s/mi más lento. Entrenar más rápido que eso = advertir.
+5. Carrera larga: 2-3 min/mi MÁS LENTO que ritmo de carrera.
+6. Consistencia > heroísmo: 3 días de calidad con recuperación > 5 forzados. Días seguidos de trote en fase inicial = riesgo.
+7. Respetar los relojes trote/caminata TODO el entrenamiento.
+8. Días caminata/cruzado = recuperación activa conversacional.
+9. "nota" del corredor (molestias/sensaciones) = MÁXIMA prioridad, manda sobre datos positivos. Molestia recurrente: revisar "calent" (activación previa) y ritmo; recomendar activación dinámica (no estiramiento estático en frío) y bajar fase si persiste.
+Datos: f=fecha, km, min, ritmo(seg/km), tipo(tc/cam/MM), fc, calent(1/0), km1/kmFin(seg del primer/último km — detecta desplome).
+FORMATO: español, 2 párrafos breves, MÁXIMO 80 palabras en total. P1: estado y tendencia (molestias primero si existen). P2: UNA recomendación concreta. Directo, honesto, sin positivismo vacío, sin repetir números que ya ve en pantalla. No inventes datos.`;
+async function aiAnalyze(){
+  if(state.aiLoading) return;
+  state.aiLoading = true;
+  render();
+  try{
+    let text = null;
+    const engine = state.settings.aiEngine || 'claude';
+    if(engine==='gemini' && state.settings.geminiKey){
+      // Gemini (Google AI Studio) — capa gratuita disponible
+      const resp = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent', {
+        method:'POST',
+        headers:{'Content-Type':'application/json', 'x-goog-api-key': state.settings.geminiKey},
+        body: JSON.stringify({
+          system_instruction:{parts:[{text: AI_SYSTEM_PROMPT}]},
+          contents:[{parts:[{text:'Historial de entrenamiento (JSON):\n'+JSON.stringify(compactHistoryForAI())}]}]
+        })
+      });
+      if(!resp.ok) throw new Error('gemini '+resp.status);
+      const data = await resp.json();
+      text = (data.candidates?.[0]?.content?.parts||[]).map(p=>p.text||'').join('\n');
+    } else if(state.settings.anthropicKey){
+      // Claude — vía directa desde el navegador con la clave del usuario
+      const resp = await fetch('https://api.anthropic.com/v1/messages', {
+        method:'POST',
+        headers:{
+          'Content-Type':'application/json',
+          'x-api-key': state.settings.anthropicKey,
+          'anthropic-version':'2023-06-01',
+          'anthropic-dangerous-direct-browser-access':'true'
+        },
+        body: JSON.stringify({
+          model:'claude-haiku-4-5',
+          max_tokens: 250,
+          system: [{type:'text', text: AI_SYSTEM_PROMPT, cache_control:{type:'ephemeral'}}],
+          messages:[{role:'user', content:'Historial de entrenamiento (JSON):\n'+JSON.stringify(compactHistoryForAI())}]
+        })
+      });
+      if(!resp.ok) throw new Error('api '+resp.status);
+      const data = await resp.json();
+      text = (data.content||[]).filter(c=>c.type==='text').map(c=>c.text).join('\n');
+    } else if(state.settings.proxyUrl){
+      // Vía proxy del NAS
+      const resp = await fetch(state.settings.proxyUrl+'/api/insights', {
+        method:'POST',
+        headers:{
+          'Content-Type':'application/json',
+          ...(state.settings.proxySecret ? {'x-proxy-secret':state.settings.proxySecret} : {})
+        },
+        body: JSON.stringify({history: state.history.slice(0,60)})
+      });
+      if(!resp.ok) throw new Error('proxy '+resp.status);
+      const data = await resp.json();
+      text = data.insight;
+    }
+    state.aiInsight = text || 'No se recibió respuesta del análisis.';
+  }catch(e){
+    state.aiInsight = null;
+    alert('No se pudo completar el análisis. Revisa tu clave o la conexión. ('+e.message+')');
+  }
+  state.aiLoading = false;
+  render();
+}
+
+/* ============== EVENT HANDLERS ============== */
+function attachHandlers(){
+  const slideHandle = document.getElementById('slideHandle');
+  const slideTrack = document.getElementById('slideStart');
+  if(slideHandle && slideTrack){
+    let dragging=false, startX=0, maxX=0;
+    const doStart = ()=>{
+      const e = state.pre.entrenamiento;
+      const r = RATIOS.find(x=>x.id===e.ratioId) || RATIOS[0];
+      startSession(r.run, r.walk, e.minutes, null);
+    };
+    const getX = ev => (ev.touches ? ev.touches[0].clientX : ev.clientX);
+    const onMove = ev=>{
+      if(!dragging) return;
+      const dx = Math.max(0, Math.min(maxX, getX(ev)-startX));
+      slideHandle.style.left = (4+dx)+'px';
+      if(dx >= maxX-4){ endDrag(true); }
+    };
+    const endDrag = (completed)=>{
+      if(!dragging) return;
+      dragging=false;
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+      document.removeEventListener('touchmove', onMove);
+      document.removeEventListener('touchend', onUp);
+      if(completed){ doStart(); }
+      else { slideHandle.style.transition='left .2s ease'; slideHandle.style.left='4px'; setTimeout(()=>{ if(slideHandle) slideHandle.style.transition=''; },200); }
+    };
+    const onUp = ()=> endDrag(false);
+    const onDown = ev=>{
+      dragging=true;
+      startX = getX(ev);
+      maxX = slideTrack.clientWidth - slideHandle.clientWidth - 8;
+      document.addEventListener('mousemove', onMove);
+      document.addEventListener('mouseup', onUp);
+      document.addEventListener('touchmove', onMove, {passive:true});
+      document.addEventListener('touchend', onUp);
+    };
+    slideHandle.addEventListener('mousedown', onDown);
+    slideHandle.addEventListener('touchstart', onDown, {passive:true});
+  }
+  const openAct = document.querySelector('[data-action="open-activity"]');
+  if(openAct) openAct.onclick = openActivityPicker;
+  const openEnt = document.querySelector('[data-action="open-entrenamiento"]');
+  if(openEnt) openEnt.onclick = openEntrenamientoPicker;
+  const quickMusic = document.querySelector('[data-action="quick-open-music"]');
+  if(quickMusic) quickMusic.onclick = (e)=>{ e.stopPropagation(); openMusicApp(); };
+  const openMus = document.querySelector('[data-action="open-music"]');
+  if(openMus) openMus.onclick = openMusicPicker;
+  const openAud = document.querySelector('[data-action="open-audio"]');
+  if(openAud) openAud.onclick = openAudioPicker;
+
+  document.querySelectorAll('[data-action="open-plan-detail"]').forEach(el=>{
+    el.onclick = ()=> openStartPlanPicker(el.dataset.plan);
+  });
+  const aiBtn = document.querySelector('[data-action="ai-analyze"]');
+  if(aiBtn) aiBtn.onclick = aiAnalyze;
+  document.querySelectorAll('[data-action="edit-note"]').forEach(el=>{
+    el.onclick = (e)=>{
+      e.stopPropagation();
+      const idx = parseInt(el.dataset.idx);
+      const h = state.history[idx];
+      if(!h) return;
+      openOverlay('Nota de la sesión', `
+        <div class="pi-sub" style="margin-bottom:10px;">Molestias, sensaciones, contexto — la IA las considera en tu análisis.</div>
+        <textarea id="editNoteText" style="width:100%; min-height:100px; padding:12px; border-radius:12px; border:1.5px solid var(--line); background:var(--surface); color:var(--text); font-family:'Inter',sans-serif; font-size:13.5px; resize:vertical;">${h.note||''}</textarea>
+        <button class="start-btn" id="editNoteSave" style="margin-top:12px;">Guardar</button>
+      `, (ov)=>{
+        ov.querySelector('#editNoteSave').onclick = ()=>{
+          const txt = (ov.querySelector('#editNoteText').value||'').trim();
+          h.note = txt || null;
+          persistHistory();
+          ov.remove();
+          render();
+        };
+      });
+    };
+  });
+  document.querySelectorAll('[data-action="delete-history"]').forEach(el=>{
+    el.onclick = (e)=>{
+      e.stopPropagation();
+      const idx = parseInt(el.dataset.idx);
+      showConfirm('¿Eliminar este entrenamiento?', 'Se borrará del historial. Si correspondía a un día del plan, ese día quedará disponible para repetirlo.', ()=> deleteHistoryRecord(idx));
+    };
+  });
+  document.querySelectorAll('[data-action="splits-tab"]').forEach(el=>{
+    el.onclick = ()=>{
+      const idx = parseInt(el.dataset.idx);
+      state.splitsTab[idx] = el.dataset.tab;
+      render();
+    };
+  });
+  document.querySelectorAll('[data-action="toggle-splits"]').forEach(el=>{
+    el.onclick = ()=>{
+      const idx = parseInt(el.dataset.idx);
+      if(state.expandedHistory.has(idx)) state.expandedHistory.delete(idx);
+      else state.expandedHistory.add(idx);
+      render();
+    };
+  });
+  document.querySelectorAll('[data-action="toggle-week"]').forEach(el=>{
+    el.onclick = ()=>{
+      const wk = parseInt(el.dataset.week);
+      if(state.expandedWeeks.has(wk)) state.expandedWeeks.delete(wk);
+      else state.expandedWeeks.add(wk);
+      render();
+    };
+  });
+  const warmupToggle = document.querySelector('[data-action="toggle-warmup"]');
+  if(warmupToggle) warmupToggle.onclick = ()=>{ state.warmupDone = !state.warmupDone; render(); };
+  const mmBtn = document.querySelector('[data-action="start-mm"]');
+  if(mmBtn) mmBtn.onclick = ()=> startMagicMile(null);
+  document.querySelectorAll('[data-action="start-sched-day"]').forEach(el=>{
+    el.onclick = ()=>{
+      const day = state.schedule && state.schedule.days.find(d=>d.date===el.dataset.date);
+      if(day && day.withMM){
+        startMagicMile({planId:state.schedule.planId, weekNum:day.weekNum, sessionType:'long', scheduleDate:day.date});
+      } else {
+        startScheduledDay(el.dataset.date);
+      }
+    };
+  });
+  document.querySelectorAll('[data-action="mark-day"]').forEach(el=>{
+    el.onclick = (e)=>{
+      e.stopPropagation();
+      const day = state.schedule.days.find(d=>d.date===el.dataset.date);
+      if(day){ day.completed = true; persistSchedule(); render(); }
+    };
+  });
+  document.querySelectorAll('[data-action="unmark-day"]').forEach(el=>{
+    el.onclick = (e)=>{
+      e.stopPropagation();
+      showConfirm('¿Desmarcar este día?', 'Volverá a quedar disponible para entrenarlo.', ()=>{
+        const day = state.schedule.days.find(d=>d.date===el.dataset.date);
+        if(day){ day.completed = false; persistSchedule(); render(); }
+      }, 'Desmarcar');
+    };
+  });
+  const clearSched = document.querySelector('[data-action="clear-schedule"]');
+  if(clearSched) clearSched.onclick = (e)=>{
+    e.stopPropagation();
+    state.schedule = null;
+    persistSchedule();
+    render();
+  };
+  const pauseBtn = document.querySelector('[data-action="pause"]');
+  if(pauseBtn) pauseBtn.onclick = pauseToggle;
+  const stopBtn = document.querySelector('[data-action="stop"]');
+  if(stopBtn) stopBtn.onclick = stopSession;
+  const manualBtn = document.querySelector('[data-action="manual-switch"]');
+  if(manualBtn) manualBtn.onclick = ()=> manualSwitch(manualBtn.dataset.to);
+  const saveNoteBtn = document.getElementById('saveNoteBtn');
+  if(saveNoteBtn) saveNoteBtn.onclick = ()=>{
+    const txt = (document.getElementById('sessionNote').value||'').trim();
+    if(state.history[0]){ state.history[0].note = txt || null; persistHistory(); }
+    document.getElementById('noteSaved').textContent = txt ? '✓ Nota guardada — se incluirá en el análisis IA' : 'Nota vacía eliminada';
+  };
+  const backTrain = document.querySelector('[data-action="back-train"]');
+  if(backTrain) backTrain.onclick = ()=>{ state.screen='train'; render(); };
+}
+
+function openOverlay(title, bodyHtml, onMount){
+  const ov = document.createElement('div');
+  ov.className = 'settings-overlay';
+  ov.innerHTML = `<h3>${title}</h3><div class="overlay-scroll">${bodyHtml}</div><button class="close-settings">Cerrar</button>`;
+  document.getElementById('app').appendChild(ov);
+  ov.querySelector('.close-settings').onclick = ()=> ov.remove();
+  if(onMount) onMount(ov);
+  return ov;
+}
+function openActivityPicker(){
+  const body = ACTIVITIES.map(a=>`<div class="pick-item ${a.id===state.pre.activityId?'selected':''}" data-id="${a.id}">
+    <div><div class="pi-name">${a.name}</div><div class="pi-sub">${a.detail}</div></div>${a.id===state.pre.activityId?'<span class="pi-check">✓</span>':''}
+  </div>`).join('');
+  const ov = openOverlay('Actividad', body, (ov)=>{
+    ov.querySelectorAll('.pick-item').forEach(el=>{
+      el.onclick = ()=>{
+        state.pre.activityId = el.dataset.id;
+        // Al elegir caminata libre, forzar entrenamiento libre sin plan
+        if(el.dataset.id === 'walking' && state.pre.entrenamiento.type === 'plan'){
+          state.pre.entrenamiento = {type:'ratio', ratioId:'f1', minutes:20};
+        }
+        persistPre(); ov.remove(); render();
+      };
+    });
+  });
+}
+function openStartPlanPicker(planId){
+  const plan = getPlan(planId);
+  // Opciones de semana de inicio: 1 (desde cero) o saltar a semanas intermedias
+  let weekOptions = '';
+  plan.weeks.forEach((w,i)=>{
+    weekOptions += `<option value="${i+1}" ${i===0?'selected':''}>Semana ${i+1} — trote ${w.runMin} min · domingo ${w.longMiles} mi${w.isRace?' (carrera)':''}</option>`;
+  });
+  const body = `
+    <div class="pi-sub" style="margin-bottom:14px; line-height:1.6;">Programa el calendario completo. La relación trote/caminata sube de fase automáticamente cada 2 semanas. Estructura semanal: Mar/Jue trote-camina · Dom carrera larga · Lun/Mié/Vie caminata o cruzado · Sáb descanso.</div>
+    <div class="eyebrow" style="margin-top:0;">Fecha de inicio</div>
+    <input type="date" id="schedDate" value="${todayStr()}" style="width:100%; background:var(--surface); border:1.5px solid var(--line); color:var(--text); border-radius:12px; padding:12px; font-family:'Inter',sans-serif; margin-bottom:14px;">
+    <div class="eyebrow">Semana de inicio</div>
+    <div class="pi-sub" style="margin-bottom:8px;">Si ya corres, puedes saltar las primeras semanas.</div>
+    <select id="schedWeek" style="width:100%; background:var(--surface); border:1.5px solid var(--line); color:var(--text); border-radius:12px; padding:12px; font-family:'Inter',sans-serif; margin-bottom:14px;">${weekOptions}</select>
+    <button class="start-btn" id="schedConfirm" style="margin-top:0;">📅 Comenzar plan</button>`;
+  openOverlay(plan.name, body, (ov)=>{
+    const schedBtn = ov.querySelector('#schedConfirm');
+    schedBtn.onclick = ()=>{
+      const startDate = ov.querySelector('#schedDate').value || todayStr();
+      const startWeek = parseInt(ov.querySelector('#schedWeek').value) || 1;
+      state.schedule = buildSchedule(planId, startDate, startWeek);
+      state.expandedWeeks = new Set([startWeek]);
+      autoSyncScheduleWithHistory();
+      persistSchedule();
+      ov.remove();
+      state.screen='plans'; render();
+    };
+  });
+}
+function openEntrenamientoPicker(){
+  let body = `<div class="pi-sub" style="margin-bottom:10px;">Configura tu entrenamiento libre. Para seguir un plan Run-Walk-Run, ve a la pestaña <b>Planes</b>.</div>
+  <div class="eyebrow" style="margin-top:0;">Relación trote / caminata</div>`;
+  RATIOS.forEach(r=>{
+    const sel = state.pre.entrenamiento.ratioId===r.id;
+    body += `<div class="pick-item ${sel?'selected':''}" data-type="ratio" data-id="${r.id}">
+      <div><div class="pi-name">${r.name}</div><div class="pi-sub">${r.detail}</div></div>
+      ${sel?'<span class="pi-check">✓</span>':''}
+    </div>`;
+  });
+  body += `<div class="eyebrow">Duración</div><div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:10px;">`;
+  DURATIONS.forEach(d=>{
+    const sel = state.pre.entrenamiento.minutes===d;
+    body += `<div class="ratio-pill" data-dur="${d}" style="cursor:pointer; padding:8px 14px; ${sel?'background:var(--run); color:#fff;':''}">${d} min</div>`;
+  });
+  body += `</div>`;
+  const ov = openOverlay('Entrenamiento libre', body, (ov)=>{
+    ov.querySelectorAll('[data-type="ratio"]').forEach(el=>{
+      el.onclick = ()=>{
+        state.pre.entrenamiento = {type:'ratio', ratioId:el.dataset.id, minutes:state.pre.entrenamiento.minutes||20};
+        persistPre(); ov.remove(); render(); openEntrenamientoPicker();
+      };
+    });
+    ov.querySelectorAll('[data-dur]').forEach(el=>{
+      el.onclick = ()=>{
+        state.pre.entrenamiento.minutes = parseInt(el.dataset.dur);
+        persistPre(); ov.remove(); render(); openEntrenamientoPicker();
+      };
+    });
+  });
+}
+function openMusicPicker(){
+  const body = MUSIC_OPTIONS.map(m=>`<div class="pick-item ${m.id===state.pre.musicId?'selected':''}" data-id="${m.id}">
+    <div class="pi-name">${m.name}</div>
+    <span style="display:flex; align-items:center; gap:8px;">
+      ${m.link?`<span class="ratio-pill" data-open-music="${m.id}" style="cursor:pointer; color:var(--run);">▶ Abrir</span>`:''}
+      ${m.id===state.pre.musicId?'<span class="pi-check">✓</span>':''}
+    </span>
+  </div>`).join('') + `<div class="gps-note" style="text-align:left; margin-top:6px;">El navegador no puede controlar la reproducción, pero "▶ Abrir" te lleva directo a la app para poner tu música y volver.</div>`;
+  const ov = openOverlay('Música', body, (ov)=>{
+    ov.querySelectorAll('[data-open-music]').forEach(el=>{
+      el.onclick = (e)=>{
+        e.stopPropagation();
+        state.pre.musicId = el.dataset.openMusic; persistPre();
+        openMusicApp();
+      };
+    });
+    ov.querySelectorAll('.pick-item').forEach(el=>{
+      el.onclick = ()=>{ state.pre.musicId = el.dataset.id; persistPre(); ov.remove(); render(); };
+    });
+  });
+}
+function openAudioPicker(){
+  const body = AUDIO_STATS.map(a=>`<div class="pick-item ${a.id===state.pre.audioStatId?'selected':''}" data-id="${a.id}">
+    <div><div class="pi-name">${a.name}</div><div class="pi-sub">${a.detail}</div></div>${a.id===state.pre.audioStatId?'<span class="pi-check">✓</span>':''}
+  </div>`).join('');
+  const ov = openOverlay('Estadísticas de audio', body, (ov)=>{
+    ov.querySelectorAll('.pick-item').forEach(el=>{
+      el.onclick = ()=>{ state.pre.audioStatId = el.dataset.id; persistPre(); ov.remove(); render(); };
+    });
+  });
+}
+
+document.querySelectorAll('.navbtn').forEach(btn=>{
+  btn.onclick = ()=>{
+    if(state.screen==='active') return; // bloquear navegación durante sesión activa
+    state.screen = btn.dataset.screen;
+    render();
+  };
+});
+
+/* ============== SETTINGS OVERLAY ============== */
+document.getElementById('gearBtn').onclick = ()=>{
+  const ov = document.createElement('div');
+  ov.className = 'settings-overlay';
+  ov.innerHTML = `
+    <h3>Ajustes</h3>
+    <div class="overlay-scroll">
+    <div class="toggle-row"><div><div class="lbl">Aviso de voz</div><div class="sub">Anuncia cada cambio de trote/caminata</div></div><div class="switch ${state.settings.voice?'on':''}" id="swVoice"></div></div>
+    <div class="toggle-row"><div><div class="lbl">GPS</div><div class="sub">Registrar distancia y ritmo</div></div><div class="switch ${state.settings.gps?'on':''}" id="swGps"></div></div>
+    <div class="toggle-row"><div><div class="lbl">Vibración</div><div class="sub">Vibrar en cada cambio de intervalo</div></div><div class="switch ${state.settings.vibrate?'on':''}" id="swVib"></div></div>
+    <div class="eyebrow">Sensor de frecuencia cardíaca (Bluetooth)</div>
+    ${IS_IOS ? `<div class="pi-sub" style="margin-bottom:14px;">No disponible en iPhone: Apple no permite Bluetooth en navegadores web. En Android funciona con cualquier reloj que transmita FC.</div>` : `<div class="pi-sub" style="margin-bottom:8px;">Empareja tu reloj una sola vez. Requiere que el reloj esté transmitiendo (ej. app "Heart for Bluetooth" en Galaxy Watch).</div>
+    <button class="manual-btn" id="btConnectBtn" style="border-style:solid; margin-bottom:14px;">❤️ <span id="btStatus">${state.btDeviceName ? 'Emparejado: '+state.btDeviceName : 'Conectar sensor FC'}</span></button>`}
+    <div class="eyebrow">Permisos del sistema</div>
+    ${IS_IOS ? `<div class="ratio-card" style="cursor:default; flex-direction:column; align-items:flex-start; gap:6px; margin-bottom:10px; border-color:var(--run);">
+      <div class="ratio-name">📱 iPhone detectado</div>
+      <div class="ratio-detail" style="line-height:1.6;" id="iosWakeLockInfo">Verificando si tu iPhone puede mantener la pantalla activa…</div>
+      <div class="ratio-detail" style="line-height:1.6;">Nota: la frecuencia cardíaca por Bluetooth no está disponible en iPhone (Apple no lo permite en navegadores). Todo lo demás funciona normal.</div>
+    </div>` : ''}
+    <div class="pi-sub" style="margin-bottom:10px;">Estos permisos permiten que la app funcione con la pantalla bloqueada y registre tu posición.</div>
+    <button class="manual-btn" id="permNotifBtn" style="border-style:solid; margin-bottom:8px;" id="permNotifBtn">🔔 Notificaciones — <span id="notifStatus">verificando...</span></button>
+    <button class="manual-btn" id="permGpsBtn" style="border-style:solid; margin-bottom:8px;">📍 Ubicación (GPS) — <span id="gpsPermStatus">verificando...</span></button>
+    <div class="pi-sub" style="margin-bottom:14px; line-height:1.6;">${IS_IOS ? 'Si un permiso aparece como "denegado": Configuración → Safari (o tu navegador) → ajusta Ubicación y Notificaciones.' : 'Si un permiso aparece como "denegado", toca el botón y sigue las instrucciones del sistema. Para la pantalla bloqueada también ve a Ajustes Android → Apps → Samsung Internet → Batería → Sin restricciones.'}</div>
+    <div class="eyebrow">Análisis IA (opcional · proxy en NAS)</div>
+    <div class="pi-sub" style="margin-bottom:8px;">Solo necesario para el análisis inteligente de tu progresión. La frecuencia cardíaca ya no lo requiere: se conecta directo desde tu reloj por Bluetooth (sección de arriba).</div>
+    <div class="pi-sub" style="margin-bottom:6px;"><b style="color:var(--text);">Motor de IA:</b></div>
+    <div style="display:flex; gap:8px; margin-bottom:12px;">
+      <div class="ratio-pill" id="engineClaude" style="cursor:pointer; padding:9px 16px; ${(state.settings.aiEngine||'claude')==='claude'?'background:var(--run); color:#fff;':''}">Claude</div>
+      <div class="ratio-pill" id="engineGemini" style="cursor:pointer; padding:9px 16px; ${state.settings.aiEngine==='gemini'?'background:var(--run); color:#fff;':''}">Gemini (gratis)</div>
+    </div>
+    <div class="pi-sub" style="margin-bottom:6px;"><b style="color:var(--text);">Opción simple:</b> pega tu clave de Anthropic (console.anthropic.com). Queda guardada solo en este celular.</div>
+    <input type="password" id="anthropicKeyInput" placeholder="sk-ant-..." value="${state.settings.anthropicKey||''}" style="width:100%; padding:12px; border-radius:12px; border:1.5px solid var(--line); background:var(--surface-2); color:var(--text); margin-bottom:10px; font-family:'Inter',sans-serif;">
+    <div class="pi-sub" style="margin-bottom:6px;"><b style="color:var(--text);">Gemini:</b> clave gratuita de Google AI Studio (aistudio.google.com → Get API key).</div>
+    <input type="password" id="geminiKeyInput" placeholder="AIza..." value="${state.settings.geminiKey||''}" style="width:100%; padding:12px; border-radius:12px; border:1.5px solid var(--line); background:var(--surface-2); color:var(--text); margin-bottom:14px; font-family:'Inter',sans-serif;">
+    <div class="pi-sub" style="margin-bottom:6px;"><b style="color:var(--text);">Opción avanzada:</b> proxy en tu NAS vía Tailscale (la clave nunca sale del NAS).</div>
+    <input type="text" id="proxyUrlInput" placeholder="https://tu-nas.tu-tailnet.ts.net" value="${state.settings.proxyUrl||''}" style="width:100%; padding:12px; border-radius:12px; border:1.5px solid var(--line); background:var(--surface-2); color:var(--text); margin-bottom:10px; font-family:'Inter',sans-serif;">
+    <input type="text" id="proxySecretInput" placeholder="Token secreto del proxy" value="${state.settings.proxySecret||''}" style="width:100%; padding:12px; border-radius:12px; border:1.5px solid var(--line); background:var(--surface-2); color:var(--text); margin-bottom:10px; font-family:'Inter',sans-serif;">
+    <button class="manual-btn" id="testProxyBtn" style="border-style:solid;">Probar conexión</button>
+    <div id="proxyTestResult" class="pi-sub" style="margin-top:8px;"></div>
+    <div class="eyebrow">Respaldo de datos</div>
+    <div class="pi-sub" style="margin-bottom:10px; line-height:1.6;">Todo (historial, plan, récords, Magic Mile y ajustes) vive solo en este dispositivo. Exporta un respaldo antes de limpiar el navegador o cambiar de celular. Las claves de IA no se incluyen por seguridad.</div>
+    <button class="manual-btn" id="exportDataBtn" style="border-style:solid; margin-bottom:8px;">📤 Exportar respaldo</button>
+    <button class="manual-btn" id="importDataBtn" style="border-style:solid; margin-bottom:8px;">📥 Importar respaldo</button>
+    <input type="file" id="importFileInput" accept=".json,application/json" style="display:none;">
+    <div id="backupResult" class="pi-sub" style="margin-top:4px;"></div>
+    </div>
+    <button class="close-settings" id="closeSettings">Cerrar</button>
+  `;
+  document.getElementById('app').appendChild(ov);
+  // iOS: verificar Wake Lock y dar guía manual si no está disponible
+  const iosInfo = document.getElementById('iosWakeLockInfo');
+  if(iosInfo){
+    if('wakeLock' in navigator){
+      iosInfo.innerHTML = '✓ Tu iPhone <b>sí puede</b> mantener la pantalla activa durante el entrenamiento (se activa automáticamente al comenzar). Si igual notas que se apaga, sigue la guía de abajo.';
+    } else {
+      iosInfo.innerHTML = '✗ Tu versión de iOS no soporta mantener la pantalla activa automáticamente. <b>Solución manual:</b> Configuración → Pantalla y brillo → Bloqueo automático → <b>Nunca</b> (recuerda volver a activarlo después de entrenar). Apple no permite que las apps web abran esa sección directamente.';
+    }
+  }
+  // Bluetooth FC
+  const btBtn = document.getElementById('btConnectBtn');
+  const btStatus = document.getElementById('btStatus');
+  if(btBtn) btBtn.onclick = async ()=>{
+    btStatus.textContent = 'Buscando dispositivos...';
+    const ok = await btPair();
+    if(ok){
+      btStatus.textContent = '✓ Emparejado: '+state.btDeviceName+(state.btLiveHr ? ' · ♥ '+state.btLiveHr : ' (esperando señal...)');
+      btStatus.style.color = 'var(--walk)';
+    } else {
+      btStatus.textContent = state.btDeviceName ? 'Emparejado: '+state.btDeviceName : 'Conectar sensor FC';
+      btStatus.style.color = '';
+    }
+  };
+  // Permisos — verificar estado actual y manejar solicitudes
+  const notifBtn = document.getElementById('permNotifBtn');
+  const notifStatus = document.getElementById('notifStatus');
+  const gpsBtn = document.getElementById('permGpsBtn');
+  const gpsPermStatus = document.getElementById('gpsPermStatus');
+  async function refreshPermStatus(){
+    // Notificaciones
+    if(!('Notification' in window)){
+      notifStatus.textContent = 'no disponible en este navegador';
+    } else if(Notification.permission === 'granted'){
+      notifStatus.textContent = '✓ Concedido';
+      notifStatus.style.color = 'var(--walk)';
+    } else if(Notification.permission === 'denied'){
+      notifStatus.textContent = '✗ Denegado — ve a Ajustes del navegador para activarlo';
+      notifStatus.style.color = 'var(--danger)';
+    } else {
+      notifStatus.textContent = 'Toca para conceder permiso';
+    }
+    // GPS
+    if(!('geolocation' in navigator)){
+      gpsPermStatus.textContent = 'no disponible';
+    } else {
+      try{
+        const p = await navigator.permissions.query({name:'geolocation'});
+        if(p.state === 'granted'){ gpsPermStatus.textContent = '✓ Concedido'; gpsPermStatus.style.color='var(--walk)'; }
+        else if(p.state === 'denied'){ gpsPermStatus.textContent = '✗ Denegado — ve a Ajustes del navegador'; gpsPermStatus.style.color='var(--danger)'; }
+        else { gpsPermStatus.textContent = 'Toca para conceder permiso'; }
+      }catch(e){ gpsPermStatus.textContent = 'Toca para conceder permiso'; }
+    }
+  }
+  refreshPermStatus();
+  notifBtn.onclick = async ()=>{
+    if(Notification.permission === 'denied'){
+      alert('El permiso de notificaciones fue denegado previamente. Ve a Ajustes de Android → Apps → Samsung Internet → Permisos → Notificaciones → Permitir.');
+      return;
+    }
+    const result = await Notification.requestPermission();
+    refreshPermStatus();
+    if(result === 'granted') notify('✓ Notificaciones activadas', 'Recibirás avisos aunque la pantalla esté bloqueada.');
+  };
+  gpsBtn.onclick = ()=>{
+    if(!('geolocation' in navigator)){ alert('Tu navegador no soporta geolocalización.'); return; }
+    navigator.geolocation.getCurrentPosition(
+      ()=> refreshPermStatus(),
+      err=>{
+        if(err.code === 1) alert('GPS denegado. Ve a Ajustes de Android → Apps → Samsung Internet → Permisos → Ubicación → Permitir siempre.');
+        refreshPermStatus();
+      },
+      {enableHighAccuracy:true, timeout:8000}
+    );
+  };
+  document.getElementById('swVoice').onclick = (e)=>{ state.settings.voice=!state.settings.voice; e.target.classList.toggle('on'); persistSettings(); };
+  document.getElementById('swGps').onclick = (e)=>{ state.settings.gps=!state.settings.gps; e.target.classList.toggle('on'); persistSettings(); };
+  document.getElementById('swVib').onclick = (e)=>{ state.settings.vibrate=!state.settings.vibrate; e.target.classList.toggle('on'); persistSettings(); };
+  const urlInput = document.getElementById('proxyUrlInput');
+  const secretInput = document.getElementById('proxySecretInput');
+  const keyInput = document.getElementById('anthropicKeyInput');
+  urlInput.onchange = ()=>{ state.settings.proxyUrl = urlInput.value.trim().replace(/\/$/,''); persistSettings(); };
+  secretInput.onchange = ()=>{ state.settings.proxySecret = secretInput.value.trim(); persistSettings(); };
+  if(keyInput) keyInput.onchange = ()=>{ state.settings.anthropicKey = keyInput.value.trim(); persistSettings(); };
+  document.getElementById('testProxyBtn').onclick = async ()=>{
+    const resEl = document.getElementById('proxyTestResult');
+    resEl.textContent = 'Probando...';
+    try{
+      const r = await fetch((state.settings.proxyUrl||'')+'/health', {signal: AbortSignal.timeout ? AbortSignal.timeout(6000) : undefined});
+      const data = await r.json();
+      if(data && data.ok) resEl.textContent = '✓ Proxy conectado y listo para el análisis IA.';
+      else resEl.textContent = '✗ El proxy respondió pero con un formato inesperado.';
+    }catch(e){
+      resEl.textContent = '✗ No se pudo conectar. Revisa la URL, que el contenedor esté corriendo, y que tengas Tailscale activo.';
+    }
+  };
+  // Respaldo
+  const exportBtn = document.getElementById('exportDataBtn');
+  const importBtn = document.getElementById('importDataBtn');
+  const importInput = document.getElementById('importFileInput');
+  const backupResult = document.getElementById('backupResult');
+  if(exportBtn) exportBtn.onclick = ()=>{ backupResult.textContent = exportBackup(); };
+  if(importBtn) importBtn.onclick = ()=> importInput.click();
+  if(importInput) importInput.onchange = ()=>{
+    if(importInput.files && importInput.files[0]) importBackup(importInput.files[0], backupResult);
+    importInput.value = '';
+  };
+  document.getElementById('closeSettings').onclick = ()=> ov.remove();
+};
+
+loadPersisted();
+
+if('serviceWorker' in navigator){
+  window.addEventListener('load', ()=>{
+    navigator.serviceWorker.register('sw.js').catch(()=>{});
+  });
+}
+</script>
+</body>
+</html>
